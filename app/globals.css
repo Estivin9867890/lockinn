@@ -1,0 +1,288 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@import "leaflet/dist/leaflet.css";
+
+/* ─── Base Reset ────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --background: #F5F5F7;
+  --foreground: #1D1D1F;
+  --surface: rgba(255, 255, 255, 0.75);
+  --surface-hover: rgba(255, 255, 255, 0.9);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-light: rgba(255, 255, 255, 0.6);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+
+  /* Apple Palette */
+  --apple-blue: #5B9CF6;
+  --apple-mint: #34D399;
+  --apple-rose: #F472B6;
+  --apple-orange: #FB923C;
+  --apple-purple: #A78BFA;
+  --apple-yellow: #FBBF24;
+  --apple-red: #F87171;
+  --apple-indigo: #818CF8;
+
+  --sidebar-width: 240px;
+}
+
+html, body {
+  height: 100%;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbar ────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 100px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* ─── Glassmorphism Utilities ───────────────────────── */
+@layer components {
+  .glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+
+  .glass-sm {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px) saturate(160%);
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+
+  .glass-dark {
+    background: rgba(29, 29, 31, 0.75);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  .card {
+    @apply glass rounded-2xl p-5 transition-all duration-300;
+  }
+
+  .card:hover {
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    transform: translateY(-1px);
+  }
+
+  .sidebar {
+    background: rgba(245, 245, 247, 0.88);
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    border-right: 1px solid rgba(0, 0, 0, 0.06);
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500
+           transition-all duration-200 cursor-pointer select-none;
+  }
+
+  .nav-item:hover {
+    @apply bg-black/5 text-gray-800;
+  }
+
+  .nav-item.active {
+    background: rgba(255, 255, 255, 0.9);
+    color: #1D1D1F;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, var(--apple-blue), var(--apple-purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .apple-ring {
+    filter: drop-shadow(0 0 8px currentColor);
+  }
+}
+
+/* ─── Leaflet Overrides ─────────────────────────────── */
+.leaflet-container {
+  border-radius: 1rem !important;
+  font-family: inherit !important;
+}
+
+.leaflet-control-zoom {
+  border: none !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1) !important;
+}
+
+.leaflet-control-zoom a {
+  background: rgba(255, 255, 255, 0.9) !important;
+  backdrop-filter: blur(10px) !important;
+  color: #1D1D1F !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  border-radius: 8px !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(20px) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-tip {
+  background: rgba(255, 255, 255, 0.92) !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  padding: 12px 16px !important;
+  font-family: inherit !important;
+}
+
+/* ─── CMDK Command Bar ───────────────────────────────── */
+[cmdk-root] {
+  max-height: 480px;
+  overflow: hidden;
+}
+
+[cmdk-input] {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 16px;
+  color: #1D1D1F;
+  caret-color: var(--apple-blue);
+}
+
+[cmdk-input]::placeholder {
+  color: rgba(29, 29, 31, 0.4);
+}
+
+[cmdk-list] {
+  max-height: 380px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+[cmdk-item] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #1D1D1F;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+[cmdk-item][aria-selected="true"] {
+  background: rgba(91, 156, 246, 0.12);
+  color: var(--apple-blue);
+}
+
+[cmdk-group-heading] {
+  padding: 6px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(29, 29, 31, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+[cmdk-separator] {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.06);
+  margin: 4px 0;
+}
+
+[cmdk-empty] {
+  padding: 32px 16px;
+  text-align: center;
+  color: rgba(29, 29, 31, 0.4);
+  font-size: 14px;
+}
+
+/* ─── Recharts Overrides ─────────────────────────────── */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: rgba(0, 0, 0, 0.04) !important;
+}
+
+.recharts-tooltip-wrapper {
+  outline: none !important;
+}
+
+.recharts-default-tooltip {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+}
+
+/* ─── Animations ─────────────────────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg,
+    rgba(0,0,0,0.04) 25%,
+    rgba(0,0,0,0.08) 50%,
+    rgba(0,0,0,0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+.float { animation: float 4s ease-in-out infinite; }
+
+/* ─── Gradient Backgrounds ───────────────────────────── */
+.bg-gradient-blue { background: linear-gradient(135deg, #5B9CF6 0%, #818CF8 100%); }
+.bg-gradient-mint { background: linear-gradient(135deg, #34D399 0%, #10B981 100%); }
+.bg-gradient-rose { background: linear-gradient(135deg, #F472B6 0%, #EC4899 100%); }
+.bg-gradient-orange { background: linear-gradient(135deg, #FB923C 0%, #F97316 100%); }
+.bg-gradient-purple { background: linear-gradient(135deg, #A78BFA 0%, #7C3AED 100%); }
