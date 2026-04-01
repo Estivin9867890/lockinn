@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS memos (
   icon         TEXT DEFAULT '📝',
   color        TEXT DEFAULT '#FEFCE8',
   scheduled_at TIMESTAMPTZ,
-  event_id     UUID REFERENCES events(id) ON DELETE SET NULL,
+  event_id     UUID,  -- FK souple vers events(id), pas de contrainte hard (events créée séparément)
   completed    BOOLEAN DEFAULT false,
   pinned       BOOLEAN DEFAULT false,
   created_at   TIMESTAMPTZ DEFAULT now()
