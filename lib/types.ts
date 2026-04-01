@@ -25,6 +25,16 @@ export interface UserSettings {
   custom_points_config?: Record<string, number>;
   custom_bad_habits?: CustomBadHabit[];
   // Strava
+  // Finance
+  weekly_budget_eur?: number;
+  thermal_threshold?: number;
+  // Settings V2
+  hardcore_mode?: boolean;
+  auto_reset_33h?: boolean;
+  currency?: string;
+  theme?: string;
+  morning_routine_time?: string;
+  night_routine_time?: string;
   strava_connected: boolean;
   strava_athlete_id?: number;
   strava_access_token?: string;
@@ -409,6 +419,20 @@ export interface Investment {
   quantity?: number;
   buy_price?: number;
   current_price?: number;
+  date: string;
+  notes?: string | null;
+  created_at: string;
+  transactions?: InvestmentTransaction[];
+}
+
+export interface InvestmentTransaction {
+  id: string;
+  user_id: string;
+  investment_id: string;
+  type: "buy" | "sell";
+  quantity: number;
+  price_eur: number;
+  total_eur: number;
   date: string;
   notes?: string | null;
   created_at: string;

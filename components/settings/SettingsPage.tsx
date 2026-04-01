@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import {
   Droplets, Flame, Footprints, Dumbbell, DollarSign,
   Moon, Apple, Activity, Settings, ChevronRight, User, Zap, Scale, Trophy,
+  Link2, Palette, Bell, Globe, Swords, Shield, Download, Trash2, Sun,
+  ToggleLeft, ToggleRight, Calendar, Cloud,
 } from "lucide-react";
 import { DEFAULT_POINTS_CONFIG } from "@/lib/types";
 import type { CustomBadHabit } from "@/lib/types";
@@ -132,6 +134,48 @@ const sections = [
     label: "Score LockIn",
     icon: Trophy,
     color: "#F59E0B",
+    fields: [],
+  },
+  {
+    id: "integrations",
+    label: "Intégrations",
+    icon: Link2,
+    color: "#6366F1",
+    fields: [],
+  },
+  {
+    id: "apparence",
+    label: "Apparence",
+    icon: Palette,
+    color: "#EC4899",
+    fields: [],
+  },
+  {
+    id: "notifications",
+    label: "Notifications",
+    icon: Bell,
+    color: "#F59E0B",
+    fields: [],
+  },
+  {
+    id: "localisation",
+    label: "Localisation",
+    icon: Globe,
+    color: "#14B8A6",
+    fields: [],
+  },
+  {
+    id: "difficulte",
+    label: "Difficulté",
+    icon: Swords,
+    color: "#EF4444",
+    fields: [],
+  },
+  {
+    id: "securite",
+    label: "Sécurité",
+    icon: Shield,
+    color: "#8B5CF6",
     fields: [],
   },
 ];
@@ -280,6 +324,14 @@ export default function SettingsPage() {
   const [editableConfig, setEditableConfig] = useState<Record<string, number>>({ ...DEFAULT_POINTS_CONFIG });
   const [badHabits, setBadHabits] = useState<CustomBadHabit[]>([]);
   const [newHabit, setNewHabit] = useState({ label: "", emoji: "🚬", points: -20 });
+  const [theme, setTheme] = useState<string>(settings.theme || "space_gray");
+  const [currency, setCurrency] = useState<string>(settings.currency || "EUR");
+  const [hardcoreMode, setHardcoreMode] = useState<boolean>(settings.hardcore_mode || false);
+  const [autoReset33h, setAutoReset33h] = useState<boolean>(settings.auto_reset_33h !== false);
+  const [thermalThreshold, setThermalThreshold] = useState<number>(settings.thermal_threshold || 80);
+  const [morningTime, setMorningTime] = useState<string>(settings.morning_routine_time || "07:00");
+  const [nightTime, setNightTime] = useState<string>(settings.night_routine_time || "22:00");
+  const [weeklyBudget, setWeeklyBudget] = useState<number>(settings.weekly_budget_eur || Math.round((settings.monthly_budget_eur || 1500) / 4));
 
   useEffect(() => {
     setDisplayName(settings.display_name || "");
@@ -292,6 +344,15 @@ export default function SettingsPage() {
   useEffect(() => {
     setBadHabits(settings.custom_bad_habits || []);
   }, [settings.custom_bad_habits]);
+
+  useEffect(() => { setTheme(settings.theme || "space_gray"); }, [settings.theme]);
+  useEffect(() => { setCurrency(settings.currency || "EUR"); }, [settings.currency]);
+  useEffect(() => { setHardcoreMode(settings.hardcore_mode || false); }, [settings.hardcore_mode]);
+  useEffect(() => { setAutoReset33h(settings.auto_reset_33h !== false); }, [settings.auto_reset_33h]);
+  useEffect(() => { setThermalThreshold(settings.thermal_threshold || 80); }, [settings.thermal_threshold]);
+  useEffect(() => { setMorningTime(settings.morning_routine_time || "07:00"); }, [settings.morning_routine_time]);
+  useEffect(() => { setNightTime(settings.night_routine_time || "22:00"); }, [settings.night_routine_time]);
+  useEffect(() => { setWeeklyBudget(settings.weekly_budget_eur || Math.round((settings.monthly_budget_eur || 1500) / 4)); }, [settings.weekly_budget_eur, settings.monthly_budget_eur]);
 
   useEffect(() => {
     const strava = searchParams.get("strava");
@@ -394,7 +455,15 @@ export default function SettingsPage() {
               <div>
                 <h2 className="text-[16px] font-semibold text-gray-900">{currentSection.label}</h2>
                 <p className="text-[12px] text-gray-400">
-                  {activeSection === "profil" ? "Nom, intégrations" : activeSection === "gamification" ? "Bonus & malus LockIn Score" : `${currentSection.fields.length} objectif${currentSection.fields.length > 1 ? "s" : ""} configurables`}
+                  {activeSection === "profil" ? "Nom, intégrations" :
+                   activeSection === "gamification" ? "Bonus & malus LockIn Score" :
+                   activeSection === "integrations" ? "Strava, Google Cal, Apple iCloud" :
+                   activeSection === "apparence" ? "Thèmes et personnalisation visuelle" :
+                   activeSection === "notifications" ? "Seuils et horaires de routine" :
+                   activeSection === "localisation" ? "Devise, unités et région" :
+                   activeSection === "difficulte" ? "Mode hardcore et comportements avancés" :
+                   activeSection === "securite" ? "Export de données et journaux" :
+                   `${currentSection.fields.length} objectif${currentSection.fields.length > 1 ? "s" : ""} configurables`}
                 </p>
               </div>
               {activeSection !== "profil" && (
@@ -764,6 +833,292 @@ export default function SettingsPage() {
                     <p className="text-[12px] font-semibold text-amber-700 mb-1">🎯 Objectif journalier</p>
                     <p className="text-[22px] font-bold text-amber-600">100 pts</p>
                     <p className="text-[11px] text-gray-500 mt-1">Atteins 100 pts/jour pour valider ta journée et maintenir ta série 🔥</p>
+                  </div>
+                </div>
+              ) : activeSection === "integrations" ? (
+                <div className="space-y-6">
+                  {/* Strava */}
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(252,76,2,0.12)" }}>
+                      <Zap className="w-5 h-5" style={{ color: "#FC4C02" }} />
+                    </div>
+                    <div>
+                      <h3 className="text-[14px] font-semibold text-gray-900">Strava</h3>
+                      <p className="text-[12px] text-gray-400">Synchronisez vos activités sportives</p>
+                    </div>
+                    {settings.strava_connected && (
+                      <span className="ml-auto text-[11px] px-2.5 py-1 rounded-full bg-green-50 text-green-600 font-medium">✓ Connecté</span>
+                    )}
+                  </div>
+                  {settings.strava_connected ? (
+                    <div className="space-y-2 mb-6">
+                      <button onClick={async () => { const res = await fetch("/api/strava/sync"); if (res.ok) toast.success("Strava synchronisé !"); else toast.error("Erreur"); }}
+                        className="w-full py-2.5 rounded-xl text-[13px] font-semibold text-white"
+                        style={{ background: "linear-gradient(135deg, #FC4C02, #E84C00)" }}>
+                        Synchroniser maintenant
+                      </button>
+                      <button onClick={async () => { await updateSetting("strava_connected", false); toast.success("Strava déconnecté"); }}
+                        className="w-full py-2 rounded-xl text-[12px] font-medium text-gray-500 hover:bg-black/5 transition-all">
+                        Déconnecter
+                      </button>
+                    </div>
+                  ) : (
+                    <a href="/api/strava/auth"
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-[13px] font-semibold text-white mb-6"
+                      style={{ background: "linear-gradient(135deg, #FC4C02, #E84C00)", boxShadow: "0 4px 16px rgba(252,76,2,0.3)" }}>
+                      <Zap className="w-4 h-4" /> Connecter Strava
+                    </a>
+                  )}
+
+                  {/* Google Calendar */}
+                  <div className="border-t border-black/5 pt-6">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(66,133,244,0.12)" }}>
+                        <Calendar className="w-5 h-5" style={{ color: "#4285F4" }} />
+                      </div>
+                      <div>
+                        <h3 className="text-[14px] font-semibold text-gray-900">Google Calendar</h3>
+                        <p className="text-[12px] text-gray-400">Synchronisation bidirectionnelle des événements</p>
+                      </div>
+                      <span className="ml-auto text-[11px] px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 font-medium">Bientôt</span>
+                    </div>
+                    <div className="p-3 rounded-xl" style={{ background: "rgba(66,133,244,0.06)", border: "1px dashed rgba(66,133,244,0.2)" }}>
+                      <p className="text-[12px] text-gray-500">L'intégration Google Calendar sera disponible prochainement via OAuth 2.0.</p>
+                    </div>
+                  </div>
+
+                  {/* Apple iCloud */}
+                  <div className="border-t border-black/5 pt-6">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "rgba(0,0,0,0.06)" }}>
+                        <Cloud className="w-5 h-5 text-gray-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-[14px] font-semibold text-gray-900">Apple iCloud</h3>
+                        <p className="text-[12px] text-gray-400">Calendrier & Rappels Apple</p>
+                      </div>
+                      <span className="ml-auto text-[11px] px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 font-medium">Bientôt</span>
+                    </div>
+                    <div className="p-3 rounded-xl" style={{ background: "rgba(0,0,0,0.03)", border: "1px dashed rgba(0,0,0,0.1)" }}>
+                      <p className="text-[12px] text-gray-500">L'intégration iCloud nécessite CalDAV — disponible dans une prochaine mise à jour.</p>
+                    </div>
+                  </div>
+                </div>
+              ) : activeSection === "apparence" ? (
+                <div className="space-y-6">
+                  <div>
+                    <p className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-3">Thème de l'interface</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      {([
+                        { id: "space_gray", label: "Space Gray", bg: "linear-gradient(135deg, #1C1C1E, #2C2C2E)", accent: "#5B9CF6", preview: "#3A3A3C" },
+                        { id: "deep_black", label: "Deep Black", bg: "linear-gradient(135deg, #000000, #0D0D0D)", accent: "#A78BFA", preview: "#1A1A1A" },
+                        { id: "midnight_blue", label: "Midnight Blue", bg: "linear-gradient(135deg, #0F0F2E, #1A1A4E)", accent: "#34D399", preview: "#1E1E5E" },
+                      ] as const).map((t) => (
+                        <button key={t.id} onClick={async () => { setTheme(t.id); await updateSetting("theme" as any, t.id); toast.success(`Thème "${t.label}" appliqué`); }}
+                          className="flex flex-col gap-3 p-4 rounded-2xl text-left transition-all hover:scale-[1.01] active:scale-[0.99]"
+                          style={{ background: theme === t.id ? `${t.accent}12` : "rgba(0,0,0,0.03)", border: `1.5px solid ${theme === t.id ? t.accent + "50" : "rgba(0,0,0,0.08)"}` }}>
+                          <div className="w-full h-16 rounded-xl overflow-hidden relative" style={{ background: t.bg }}>
+                            <div className="absolute bottom-2 left-2 right-2 h-2 rounded-full opacity-40" style={{ background: t.accent }} />
+                            <div className="absolute top-2 left-2 w-8 h-2 rounded-full opacity-60" style={{ background: t.preview }} />
+                          </div>
+                          <p className="text-[13px] font-semibold" style={{ color: theme === t.id ? t.accent : "#6B7280" }}>{t.label}</p>
+                          {theme === t.id && <span className="text-[10px] font-medium" style={{ color: t.accent }}>✓ Actif</span>}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-3">Le thème sera appliqué au prochain rechargement de page.</p>
+                  </div>
+                </div>
+              ) : activeSection === "notifications" ? (
+                <div className="space-y-6">
+                  {/* Thermal threshold */}
+                  <div>
+                    <p className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Roue thermique — seuil d'alerte</p>
+                    <p className="text-[11px] text-gray-400 mb-4">La roue thermique passe à l'orange à ce pourcentage de dépense hebdomadaire.</p>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <div className="flex justify-between mb-1.5">
+                          <span className="text-[12px] text-gray-500">Seuil</span>
+                          <span className="text-[13px] font-bold" style={{ color: "#F59E0B" }}>{thermalThreshold}%</span>
+                        </div>
+                        <div className="relative h-2 bg-gray-100 rounded-full">
+                          <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${thermalThreshold}%`, background: "linear-gradient(to right, #34D399, #F59E0B, #EF4444)" }} />
+                          <input type="range" min={50} max={100} step={5} value={thermalThreshold}
+                            onChange={async (e) => { const v = Number(e.target.value); setThermalThreshold(v); await updateSetting("thermal_threshold" as any, v); }}
+                            className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" style={{ zIndex: 2 }} />
+                          <div className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 border-amber-400 shadow-md pointer-events-none"
+                            style={{ left: `calc(${((thermalThreshold - 50) / 50) * 100}% - 8px)` }} />
+                        </div>
+                        <div className="flex justify-between mt-1"><span className="text-[10px] text-gray-300">50%</span><span className="text-[10px] text-gray-300">100%</span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Routine times */}
+                  <div className="border-t border-black/5 pt-5">
+                    <p className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-3">Horaires de routine</p>
+                    <div className="space-y-3">
+                      {[
+                        { label: "Routine du matin", icon: Sun, value: morningTime, set: setMorningTime, key: "morning_routine_time", color: "#F59E0B" },
+                        { label: "Routine du soir", icon: Moon, value: nightTime, set: setNightTime, key: "night_routine_time", color: "#818CF8" },
+                      ].map(({ label, icon: Icon, value, set, key, color }) => (
+                        <div key={key} className="flex items-center gap-4 p-3 rounded-xl" style={{ background: "rgba(0,0,0,0.03)", border: "1px solid rgba(0,0,0,0.06)" }}>
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${color}15` }}>
+                            <Icon className="w-4 h-4" style={{ color }} />
+                          </div>
+                          <span className="flex-1 text-[13px] font-medium text-gray-700">{label}</span>
+                          <input type="time" value={value}
+                            onChange={async (e) => { set(e.target.value); await updateSetting(key as any, e.target.value); toast.success("Horaire mis à jour", { duration: 1200 }); }}
+                            className="px-3 py-1.5 rounded-xl text-[13px] font-semibold outline-none"
+                            style={{ background: `${color}10`, border: `1.5px solid ${color}30`, color }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : activeSection === "localisation" ? (
+                <div className="space-y-6">
+                  {/* Currency */}
+                  <div>
+                    <p className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-3">Devise</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: "EUR", symbol: "€", label: "Euro" },
+                        { id: "USD", symbol: "$", label: "Dollar US" },
+                        { id: "GBP", symbol: "£", label: "Livre sterling" },
+                      ].map((c) => (
+                        <button key={c.id} onClick={async () => { setCurrency(c.id); await updateSetting("currency" as any, c.id); toast.success(`Devise : ${c.label}`); }}
+                          className="flex flex-col items-center gap-1.5 py-4 rounded-2xl transition-all"
+                          style={{ background: currency === c.id ? "rgba(20,184,166,0.12)" : "rgba(0,0,0,0.03)", border: `1.5px solid ${currency === c.id ? "rgba(20,184,166,0.4)" : "rgba(0,0,0,0.08)"}` }}>
+                          <span className="text-[24px] font-bold" style={{ color: currency === c.id ? "#14B8A6" : "#9CA3AF" }}>{c.symbol}</span>
+                          <span className="text-[12px] font-semibold" style={{ color: currency === c.id ? "#14B8A6" : "#6B7280" }}>{c.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Budget hebdo */}
+                  <div className="border-t border-black/5 pt-5">
+                    <p className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Budget hebdomadaire</p>
+                    <p className="text-[11px] text-gray-400 mb-3">Utilisé pour la roue thermique. Par défaut = budget mensuel ÷ 4.</p>
+                    <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "rgba(0,0,0,0.03)", border: "1px solid rgba(0,0,0,0.06)" }}>
+                      <DollarSign className="w-4 h-4 text-gray-400" />
+                      <span className="flex-1 text-[13px] font-medium text-gray-700">Limite hebdomadaire</span>
+                      <div className="flex items-center gap-1">
+                        <input type="number" min={50} max={5000} step={25} value={weeklyBudget}
+                          onChange={async (e) => { const v = Number(e.target.value); setWeeklyBudget(v); await updateSetting("weekly_budget_eur" as any, v); }}
+                          className="w-24 text-right px-2 py-1.5 rounded-xl text-[13px] font-bold text-teal-600 outline-none"
+                          style={{ background: "rgba(20,184,166,0.08)", border: "1.5px solid rgba(20,184,166,0.3)" }} />
+                        <span className="text-[12px] text-gray-400">{currency === "EUR" ? "€" : currency === "USD" ? "$" : "£"}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : activeSection === "difficulte" ? (
+                <div className="space-y-5">
+                  <div className="p-4 rounded-2xl" style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)" }}>
+                    <p className="text-[12px] font-semibold text-red-600 mb-1">⚠️ Mode avancé</p>
+                    <p className="text-[11px] text-gray-500 leading-relaxed">Ces options modifient le comportement de la gamification. Activer avec prudence.</p>
+                  </div>
+
+                  {/* Hardcore mode */}
+                  <div className="flex items-center gap-4 p-4 rounded-2xl" style={{ background: hardcoreMode ? "rgba(239,68,68,0.06)" : "rgba(0,0,0,0.03)", border: `1.5px solid ${hardcoreMode ? "rgba(239,68,68,0.25)" : "rgba(0,0,0,0.08)"}`, transition: "all 0.3s" }}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: hardcoreMode ? "rgba(239,68,68,0.15)" : "rgba(0,0,0,0.06)" }}>
+                      <Swords className="w-5 h-5" style={{ color: hardcoreMode ? "#EF4444" : "#9CA3AF" }} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[14px] font-semibold text-gray-900">Mode Hardcore</p>
+                      <p className="text-[12px] text-gray-400 mt-0.5">Malus ×2 · Flamme à 200 pts/jour · Pas de rattrapage</p>
+                    </div>
+                    <button onClick={async () => { const next = !hardcoreMode; setHardcoreMode(next); await updateSetting("hardcore_mode" as any, next); toast.success(next ? "Mode Hardcore activé 🔥" : "Mode Hardcore désactivé"); }}>
+                      {hardcoreMode
+                        ? <ToggleRight className="w-8 h-8" style={{ color: "#EF4444" }} />
+                        : <ToggleLeft className="w-8 h-8 text-gray-300" />}
+                    </button>
+                  </div>
+
+                  {/* Auto-reset 33h */}
+                  <div className="flex items-center gap-4 p-4 rounded-2xl" style={{ background: autoReset33h ? "rgba(91,156,246,0.06)" : "rgba(0,0,0,0.03)", border: `1.5px solid ${autoReset33h ? "rgba(91,156,246,0.25)" : "rgba(0,0,0,0.08)"}`, transition: "all 0.3s" }}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: autoReset33h ? "rgba(91,156,246,0.15)" : "rgba(0,0,0,0.06)" }}>
+                      <Bell className="w-5 h-5" style={{ color: autoReset33h ? "#5B9CF6" : "#9CA3AF" }} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[14px] font-semibold text-gray-900">Auto-Reset 33h</p>
+                      <p className="text-[12px] text-gray-400 mt-0.5">Rappel automatique si aucune action depuis 33h</p>
+                    </div>
+                    <button onClick={async () => { const next = !autoReset33h; setAutoReset33h(next); await updateSetting("auto_reset_33h" as any, next); toast.success(next ? "Auto-reset activé" : "Auto-reset désactivé"); }}>
+                      {autoReset33h
+                        ? <ToggleRight className="w-8 h-8" style={{ color: "#5B9CF6" }} />
+                        : <ToggleLeft className="w-8 h-8 text-gray-300" />}
+                    </button>
+                  </div>
+                </div>
+              ) : activeSection === "securite" ? (
+                <div className="space-y-6">
+                  {/* Export */}
+                  <div>
+                    <p className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-3">Exporter mes données</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => {
+                          const data = JSON.stringify(settings, null, 2);
+                          const blob = new Blob([data], { type: "application/json" });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url; a.download = `lockin-export-${new Date().toISOString().slice(0, 10)}.json`;
+                          a.click(); URL.revokeObjectURL(url);
+                          toast.success("Export JSON téléchargé");
+                        }}
+                        className="flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-[13px] font-semibold text-white transition-all hover:scale-[1.01] active:scale-[0.99]"
+                        style={{ background: "linear-gradient(135deg, #8B5CF6, #7C3AED)", boxShadow: "0 4px 16px rgba(139,92,246,0.3)" }}>
+                        <Download className="w-4 h-4" /> Export JSON
+                      </button>
+                      <button
+                        onClick={() => {
+                          const headers = "Clé,Valeur\n";
+                          const rows = Object.entries(settings).map(([k, v]) => `${k},"${String(v).replace(/"/g, '""')}"`).join("\n");
+                          const blob = new Blob([headers + rows], { type: "text/csv" });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url; a.download = `lockin-export-${new Date().toISOString().slice(0, 10)}.csv`;
+                          a.click(); URL.revokeObjectURL(url);
+                          toast.success("Export CSV téléchargé");
+                        }}
+                        className="flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-[13px] font-semibold transition-all hover:scale-[1.01] active:scale-[0.99]"
+                        style={{ background: "rgba(139,92,246,0.1)", border: "1.5px solid rgba(139,92,246,0.3)", color: "#8B5CF6" }}>
+                        <Download className="w-4 h-4" /> Export CSV
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Clear logs */}
+                  <div className="border-t border-black/5 pt-5">
+                    <p className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Nettoyage sélectif</p>
+                    <p className="text-[11px] text-gray-400 mb-4">Supprimer des données spécifiques. Cette action est irréversible.</p>
+                    <div className="space-y-2">
+                      {[
+                        { label: "Effacer l'historique des points", desc: "Supprime tous les logs de points LockIn", table: "points_history", color: "#F59E0B" },
+                        { label: "Effacer les logs sommeil", desc: "Supprime toutes les entrées de sommeil", table: "sleep_logs", color: "#818CF8" },
+                        { label: "Effacer les mémos", desc: "Supprime tous les mémos et notes", table: "memos", color: "#34D399" },
+                      ].map(({ label, desc, table, color }) => (
+                        <div key={table} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "rgba(0,0,0,0.03)", border: "1px solid rgba(0,0,0,0.06)" }}>
+                          <div className="flex-1">
+                            <p className="text-[13px] font-medium text-gray-700">{label}</p>
+                            <p className="text-[11px] text-gray-400">{desc}</p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              if (confirm(`Confirmer la suppression de ${label.toLowerCase()} ?`)) {
+                                toast.error(`Suppression de ${table} — connectez-vous à Supabase pour confirmer`);
+                              }
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold transition-all hover:opacity-90"
+                            style={{ background: `${color}12`, border: `1px solid ${color}30`, color }}>
+                            <Trash2 className="w-3.5 h-3.5" /> Effacer
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ) : (

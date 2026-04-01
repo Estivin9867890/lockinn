@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Plus, TrendingUp, Wallet } from "lucide-react";
+import { addPoints } from "@/lib/actions/points";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { addTransaction, deleteTransaction, addSubscription, deleteSubscription } from "@/lib/actions/finances";
@@ -21,6 +22,52 @@ const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { st
 const item = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring" as const, bounce: 0.3 } } };
 
 const THIS_MONTH = new Date().toISOString().slice(0, 7);
+
+// ─── Thermal Wheel ────────────────────────────────────────────────────────────
+function ThermalWheel({ spent, limit, threshold = 80 }: { spent: number; limit: number; threshold?: number }) {
+  const pct = limit > 0 ? Math.min(spent / limit, 1.2) : 0;
+  const displayPct = Math.min(pct, 1);
+  const R = 72; const CX = 90; const CY = 90; const SW = 18;
+  const circ = 2 * Math.PI * R;
+  const color = pct >= 1 ? "#DC2626" : pct >= 0.9 ? "#EF4444" : pct >= threshold / 100 ? "#F97316" : "#34D399";
+
+  const markerAngle = ((threshold / 100) * 360 - 90) * (Math.PI / 180);
+  const mx = CX + R * Math.cos(markerAngle);
+  const my = CY + R * Math.sin(markerAngle);
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg width={180} height={180} viewBox="0 0 180 180">
+        <circle cx={CX} cy={CY} r={R} fill="none" stroke="rgba(0,0,0,0.05)" strokeWidth={SW} />
+        <motion.circle cx={CX} cy={CY} r={R} fill="none"
+          stroke={color} strokeWidth={SW} strokeLinecap="round"
+          style={{ transform: "rotate(-90deg)", transformOrigin: `${CX}px ${CY}px` }}
+          strokeDasharray={`0 ${circ}`}
+          animate={{ strokeDasharray: `${circ * displayPct} ${circ}` }}
+          transition={{ duration: 1.4, ease: "easeOut" }}
+        />
+        {threshold < 100 && (
+          <circle cx={mx} cy={my} r={6} fill="#F97316" stroke="white" strokeWidth={2.5} />
+        )}
+        <text x={CX} y={CY - 10} textAnchor="middle" fontSize={26} fontWeight="800" fill={color}>
+          {Math.round(pct * 100)}%
+        </text>
+        <text x={CX} y={CY + 10} textAnchor="middle" fontSize={10} fill="#9CA3AF">de la limite</text>
+        <text x={CX} y={CY + 28} textAnchor="middle" fontSize={9} fill="#6B7280">
+          {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(spent)}
+          {" / "}
+          {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(limit)}
+        </text>
+      </svg>
+      <div className="flex items-center gap-2 mt-1">
+        <div className="w-2 h-2 rounded-full" style={{ background: color }} />
+        <p className="text-[12px] font-semibold" style={{ color }}>
+          {pct >= 1 ? "⚠️ Budget dépassé !" : pct >= threshold / 100 ? `⚡ Attention — ${Math.round(pct * 100)}%` : "✅ Budget maîtrisé"}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function BudgetPage() {
   const { settings } = useSettings();
@@ -59,6 +106,18 @@ export default function BudgetPage() {
   const totalSpent = monthTx.reduce((s, t) => s + t.amount, 0);
   const totalSubs = subs.reduce((s, sub) => s + sub.amount, 0);
   const remaining = settings.monthly_budget_eur - totalSpent;
+
+  // Weekly budget
+  const now = new Date();
+  const dayOfWeek = (now.getDay() + 6) % 7; // 0=Lun
+  const weekStart = new Date(now); weekStart.setDate(now.getDate() - dayOfWeek); weekStart.setHours(0, 0, 0, 0);
+  const weekStartStr = weekStart.toISOString().split("T")[0];
+  const weeklyLimit = (settings as { weekly_budget_eur?: number }).weekly_budget_eur
+    ?? Math.round(settings.monthly_budget_eur / 4);
+  const weeklySpent = transactions
+    .filter(t => t.date >= weekStartStr)
+    .reduce((s, t) => s + t.amount, 0);
+  const thermalThreshold = (settings as { thermal_threshold?: number }).thermal_threshold ?? 80;
 
   // Category totals for this month
   const catTotals: Record<string, number> = {};
@@ -162,6 +221,63 @@ export default function BudgetPage() {
             <p className="text-[11px] mt-1" style={{ color: kpi.color }}>{kpi.sub}</p>
           </motion.div>
         ))}
+      </motion.div>
+
+      {/* Thermal Wheel — Weekly Budget */}
+      <motion.div variants={item} className="card"
+        style={{ background: "linear-gradient(135deg, rgba(244,114,182,0.06), rgba(167,139,250,0.04))" }}>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-[14px] font-semibold text-gray-800">Roue Thermique — Budget Semaine</h2>
+            <p className="text-[11px] text-gray-400 mt-0.5">
+              Limite hebdo : {formatCurrency(weeklyLimit)} · Seuil alerte : {thermalThreshold}%
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[12px] text-gray-400">Semaine en cours</p>
+            <p className="text-[13px] font-semibold text-gray-700">
+              {weekStart.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} → auj.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-8">
+          <ThermalWheel spent={weeklySpent} limit={weeklyLimit} threshold={thermalThreshold} />
+          <div className="flex-1 space-y-4">
+            <div>
+              <p className="text-[11px] text-gray-400 mb-1.5">Progression cette semaine</p>
+              <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                <motion.div className="h-full rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min((weeklySpent / weeklyLimit) * 100, 100)}%` }}
+                  transition={{ duration: 1.2, ease: "easeOut" }}
+                  style={{
+                    background: weeklySpent / weeklyLimit >= 1 ? "#DC2626"
+                      : weeklySpent / weeklyLimit >= thermalThreshold / 100 ? "linear-gradient(90deg, #F97316, #EF4444)"
+                      : "linear-gradient(90deg, #34D399, #10B981)",
+                  }}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl" style={{ background: "rgba(0,0,0,0.04)" }}>
+                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Dépensé</p>
+                <p className="text-[18px] font-bold text-gray-900">{formatCurrency(weeklySpent)}</p>
+              </div>
+              <div className="p-3 rounded-xl" style={{ background: weeklySpent > weeklyLimit ? "rgba(220,38,38,0.08)" : "rgba(52,211,153,0.08)" }}>
+                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Restant</p>
+                <p className="text-[18px] font-bold" style={{ color: weeklySpent > weeklyLimit ? "#DC2626" : "#34D399" }}>
+                  {formatCurrency(Math.max(weeklyLimit - weeklySpent, 0))}
+                </p>
+              </div>
+            </div>
+            {weeklySpent <= weeklyLimit && dayOfWeek === 6 && (
+              <div className="px-3 py-2 rounded-xl text-[12px] font-semibold text-emerald-600"
+                style={{ background: "rgba(52,211,153,0.1)" }}>
+                🎯 Budget semaine respecté — +50 pts ce soir !
+              </div>
+            )}
+          </div>
+        </div>
       </motion.div>
 
       <div className="grid grid-cols-12 gap-5">

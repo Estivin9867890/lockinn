@@ -210,6 +210,15 @@ export default function Dashboard() {
       info: "Sleep Score",
       sub: "Roue circadienne · Qualité",
     },
+    {
+      href: "/investments",
+      emoji: "📈",
+      label: "Investissements",
+      color: "#34D399",
+      gradient: "linear-gradient(135deg, rgba(52,211,153,0.12), rgba(52,211,153,0.04))",
+      info: "Portefeuille",
+      sub: "Actions · Crypto · Immobilier",
+    },
   ];
 
   const handleModuleClick = (href: string) => {
