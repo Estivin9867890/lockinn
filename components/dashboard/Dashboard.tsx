@@ -148,13 +148,13 @@ export default function Dashboard() {
       sub: "Gérer mes sessions LockIn",
     },
     {
-      href: "/notes",
+      href: "/memo",
       emoji: "📝",
-      label: "Notes",
-      color: "#A78BFA",
-      gradient: "linear-gradient(135deg, rgba(167,139,250,0.12), rgba(167,139,250,0.04))",
-      info: `${noteCount} note${noteCount !== 1 ? "s" : ""}`,
-      sub: "Brain dump · CMD+K",
+      label: "Mémo",
+      color: "#FBBF24",
+      gradient: "linear-gradient(135deg, rgba(251,191,36,0.12), rgba(251,191,36,0.04))",
+      info: `${noteCount} mémo${noteCount !== 1 ? "s" : ""}`,
+      sub: "Post-it · Smart Schedule",
     },
     {
       href: "/media",
@@ -182,6 +182,24 @@ export default function Dashboard() {
       gradient: "linear-gradient(135deg, rgba(91,156,246,0.15), rgba(91,156,246,0.04))",
       info: `${todayPoints} pts aujourd'hui`,
       sub: streak > 0 ? `🔥 ${streak} jour${streak !== 1 ? "s" : ""} de suite` : "Commence ta série !",
+    },
+    {
+      href: "/projects",
+      emoji: "🚀",
+      label: "Projets",
+      color: "#34D399",
+      gradient: "linear-gradient(135deg, rgba(52,211,153,0.12), rgba(52,211,153,0.04))",
+      info: "Mes projets",
+      sub: "Milestones · Timer Focus",
+    },
+    {
+      href: "/challenges",
+      emoji: "🎯",
+      label: "Défis",
+      color: "#A78BFA",
+      gradient: "linear-gradient(135deg, rgba(167,139,250,0.12), rgba(167,139,250,0.04))",
+      info: "Quêtes & Easter Eggs",
+      sub: "Récompenses cachées 🥚",
     },
   ];
 
@@ -284,7 +302,7 @@ export default function Dashboard() {
       </motion.div>
 
       {/* Bento Grid */}
-      <motion.div variants={item} className="grid grid-cols-4 gap-4">
+      <motion.div variants={item} className="grid grid-cols-5 gap-4">
         {modules.map((mod) => (
           <motion.button
             key={mod.href}

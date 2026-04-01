@@ -19,6 +19,11 @@ export interface UserSettings {
   age?: number;
   activity_level?: string;
   nutrition_goal?: string;
+  // Sommeil
+  sleep_target_time?: string;
+  // Gamification custom
+  custom_points_config?: Record<string, number>;
+  custom_bad_habits?: CustomBadHabit[];
   // Strava
   strava_connected: boolean;
   strava_athlete_id?: number;
@@ -39,6 +44,7 @@ export const DEFAULT_SETTINGS: Omit<UserSettings, "id" | "user_id" | "updated_at
   workout_sessions_per_week: 4,
   monthly_budget_eur: 1500,
   sleep_goal_hours: 8,
+  sleep_target_time: "23:00",
   activity_level: "moderate",
   nutrition_goal: "maintenance",
   strava_connected: false,
@@ -258,6 +264,13 @@ export interface MealIngredient {
 
 // ─── Gamification ───────────────────────────────────────────────────────────
 
+export interface CustomBadHabit {
+  id: string;
+  label: string;
+  emoji: string;
+  points: number;
+}
+
 export interface PointRecord {
   id: string;
   user_id: string;
@@ -297,6 +310,75 @@ export interface SupplementLog {
   user_id: string;
   supplement_id: string;
   date: string;
+  created_at: string;
+}
+
+// ─── Mémo ────────────────────────────────────────────────────────────────────
+
+export interface Memo {
+  id: string;
+  user_id: string;
+  content: string;
+  icon: string;
+  color: string;
+  scheduled_at?: string | null;
+  event_id?: string | null;
+  completed: boolean;
+  pinned: boolean;
+  created_at: string;
+}
+
+// ─── Projets ─────────────────────────────────────────────────────────────────
+
+export interface Project {
+  id: string;
+  user_id: string;
+  title: string;
+  description?: string;
+  emoji: string;
+  color: string;
+  status: "active" | "completed" | "archived";
+  total_time_min: number;
+  milestones?: Milestone[];
+  created_at: string;
+}
+
+export interface Milestone {
+  id: string;
+  project_id: string;
+  user_id: string;
+  title: string;
+  difficulty: "easy" | "medium" | "hard";
+  completed: boolean;
+  points: number;
+  completed_at?: string | null;
+  created_at: string;
+}
+
+export interface FocusSession {
+  id: string;
+  user_id: string;
+  project_id: string;
+  duration_min: number;
+  started_at: string;
+  created_at: string;
+}
+
+// ─── Défis & Quêtes ──────────────────────────────────────────────────────────
+
+export interface Challenge {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string;
+  emoji: string;
+  type: "weekly" | "easter_egg";
+  target: number;
+  current: number;
+  points_reward: number;
+  week_start?: string | null;
+  completed: boolean;
+  completed_at?: string | null;
   created_at: string;
 }
 

@@ -8,9 +8,9 @@ import {
 import { toast } from "sonner";
 import {
   format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks,
-  addMonths, subMonths, startOfMonth, endOfMonth, isToday, isSameDay,
-  isSameMonth, parseISO, formatISO, differenceInMinutes, getHours, getMinutes,
-  setHours, setMinutes, startOfDay,
+  addMonths, subMonths, addDays, subDays, startOfMonth, endOfMonth,
+  isToday, isSameDay, isSameMonth, parseISO, formatISO,
+  differenceInMinutes, getHours, getMinutes, setHours, setMinutes, startOfDay,
 } from "date-fns";
 import { fr } from "date-fns/locale";
 import { supabase } from "@/lib/supabase";
@@ -39,7 +39,7 @@ const emptyForm = (): EventForm => ({
 });
 
 export default function CalendarPage() {
-  const [view, setView] = useState<"week" | "month">("week");
+  const [view, setView] = useState<"week" | "month" | "day">("week");
   const [refDate, setRefDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,9 +56,13 @@ export default function CalendarPage() {
     setLoading(true);
     const from = view === "week"
       ? formatISO(weekStart)
+      : view === "day"
+      ? formatISO(startOfDay(refDate))
       : formatISO(startOfMonth(refDate));
     const to = view === "week"
       ? formatISO(endOfWeek(refDate, { weekStartsOn: 1 }))
+      : view === "day"
+      ? formatISO(addDays(startOfDay(refDate), 1))
       : formatISO(endOfMonth(refDate));
     const { data } = await supabase.from("events").select("*")
       .gte("start_at", from).lte("start_at", to).order("start_at");
@@ -239,17 +243,21 @@ export default function CalendarPage() {
       <motion.div variants={item}>
         <div className="card p-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <button onClick={() => view === "week" ? setRefDate(subWeeks(refDate, 1)) : setRefDate(subMonths(refDate, 1))}
+            <button
+              onClick={() => view === "week" ? setRefDate(subWeeks(refDate, 1)) : view === "day" ? setRefDate(subDays(refDate, 1)) : setRefDate(subMonths(refDate, 1))}
               className="w-8 h-8 rounded-xl bg-black/5 hover:bg-black/8 flex items-center justify-center transition-all">
               <ChevronLeft className="w-4 h-4 text-gray-600" />
             </button>
-            <h2 className="text-[15px] font-semibold text-gray-900 min-w-[180px] text-center">
+            <h2 className="text-[15px] font-semibold text-gray-900 min-w-[200px] text-center">
               {view === "week"
                 ? `${format(weekStart, "d MMM", { locale: fr })} – ${format(endOfWeek(refDate, { weekStartsOn: 1 }), "d MMM yyyy", { locale: fr })}`
+                : view === "day"
+                ? format(refDate, "EEEE d MMMM yyyy", { locale: fr })
                 : format(refDate, "MMMM yyyy", { locale: fr })
               }
             </h2>
-            <button onClick={() => view === "week" ? setRefDate(addWeeks(refDate, 1)) : setRefDate(addMonths(refDate, 1))}
+            <button
+              onClick={() => view === "week" ? setRefDate(addWeeks(refDate, 1)) : view === "day" ? setRefDate(addDays(refDate, 1)) : setRefDate(addMonths(refDate, 1))}
               className="w-8 h-8 rounded-xl bg-black/5 hover:bg-black/8 flex items-center justify-center transition-all">
               <ChevronRight className="w-4 h-4 text-gray-600" />
             </button>
@@ -260,10 +268,14 @@ export default function CalendarPage() {
           </div>
 
           <div className="flex bg-black/5 rounded-xl p-1 gap-1">
-            {(["week", "month"] as const).map((v) => (
+            {([
+              { v: "day", label: "Jour", icon: <Calendar className="w-3.5 h-3.5" /> },
+              { v: "week", label: "Semaine", icon: <Calendar className="w-3.5 h-3.5" /> },
+              { v: "month", label: "Mois", icon: <Grid3X3 className="w-3.5 h-3.5" /> },
+            ] as const).map(({ v, label, icon }) => (
               <button key={v} onClick={() => setView(v)}
                 className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all flex items-center gap-1.5 ${v === view ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
-                {v === "week" ? <><Calendar className="w-3.5 h-3.5" /> Semaine</> : <><Grid3X3 className="w-3.5 h-3.5" /> Mois</>}
+                {icon} {label}
               </button>
             ))}
           </div>
@@ -273,7 +285,14 @@ export default function CalendarPage() {
       {/* Calendar views */}
       <motion.div variants={item}>
         <AnimatePresence mode="wait">
-          {view === "week" ? (
+          {view === "day" ? (
+            <motion.div key="day"
+              initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.2 }}>
+              <DayView day={refDate} events={events} onClickSlot={handleClickSlot}
+                onClickEvent={setSelectedEvent} eventPos={eventPos} />
+            </motion.div>
+          ) : view === "week" ? (
             <motion.div key="week"
               initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.2 }}>
@@ -285,7 +304,7 @@ export default function CalendarPage() {
               initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
               transition={{ duration: 0.2 }}>
               <MonthView refDate={refDate} days={monthDays} events={events}
-                onClickDay={(d) => { setRefDate(d); setView("week"); }}
+                onClickDay={(d) => { setRefDate(d); setView("day"); }}
                 onClickEvent={setSelectedEvent} />
             </motion.div>
           )}
@@ -457,6 +476,113 @@ function WeekView({ days, events, onClickSlot, onClickEvent, eventPos }: {
               </div>
             );
           })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Day View ─────────────────────────────────────────────────────────────────
+
+function DayView({ day, events, onClickSlot, onClickEvent, eventPos }: {
+  day: Date;
+  events: CalendarEvent[];
+  onClickSlot: (day: Date, hour: number) => void;
+  onClickEvent: (ev: CalendarEvent) => void;
+  eventPos: (ev: CalendarEvent) => { top: number; height: number };
+}) {
+  const hours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
+  const now = new Date();
+  const isCurrentDay = isToday(day);
+  const nowTop = isCurrentDay
+    ? ((now.getHours() - START_HOUR) * HOUR_HEIGHT + (now.getMinutes() / 60) * HOUR_HEIGHT)
+    : null;
+
+  const EVENT_EMOJI: Record<string, string> = {
+    lockin: "🔒", sport: "🔥", work: "💻", health: "🍎", personal: "🧡",
+  };
+
+  return (
+    <div className="card overflow-hidden p-0">
+      {/* Day header */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-black/5"
+        style={{ background: isCurrentDay ? "rgba(91,156,246,0.06)" : undefined }}>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg
+          ${isCurrentDay ? "text-white" : "text-gray-700"}`}
+          style={{ background: isCurrentDay ? "linear-gradient(135deg,#5B9CF6,#A78BFA)" : "rgba(0,0,0,0.05)" }}>
+          {format(day, "d")}
+        </div>
+        <div>
+          <p className="text-[15px] font-semibold text-gray-800 capitalize">
+            {format(day, "EEEE", { locale: fr })}
+          </p>
+          <p className="text-[12px] text-gray-400 capitalize">
+            {format(day, "MMMM yyyy", { locale: fr })}
+          </p>
+        </div>
+        <div className="ml-auto text-[12px] text-gray-400">
+          {events.length} événement{events.length !== 1 ? "s" : ""}
+        </div>
+      </div>
+
+      {/* Timeline */}
+      <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
+        <div className="flex relative" style={{ height: hours.length * HOUR_HEIGHT }}>
+          {/* Hour labels */}
+          <div className="w-14 flex-shrink-0 relative">
+            {hours.map((h) => (
+              <div key={h} className="absolute right-3 text-[11px] text-gray-400 font-medium"
+                style={{ top: (h - START_HOUR) * HOUR_HEIGHT - 7 }}>
+                {h}h
+              </div>
+            ))}
+          </div>
+
+          {/* Event column */}
+          <div className="flex-1 relative border-l border-black/5">
+            {/* Hour lines */}
+            {hours.map((h) => (
+              <div key={h}
+                onClick={() => onClickSlot(day, h)}
+                className="absolute inset-x-0 border-t border-black/5 hover:bg-blue-50/30 cursor-pointer transition-colors"
+                style={{ top: (h - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
+              />
+            ))}
+
+            {/* Current time line */}
+            {nowTop !== null && nowTop >= 0 && (
+              <div className="absolute inset-x-0 z-20 flex items-center pointer-events-none"
+                style={{ top: nowTop }}>
+                <div className="w-2 h-2 rounded-full bg-red-500 -ml-1 flex-shrink-0" />
+                <div className="flex-1 h-px bg-red-500 opacity-70" />
+              </div>
+            )}
+
+            {/* Events */}
+            {events.map((ev) => {
+              const { top, height } = eventPos(ev);
+              const emoji = EVENT_EMOJI[ev.type] ?? "📅";
+              return (
+                <motion.div key={ev.id}
+                  initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                  onClick={(e) => { e.stopPropagation(); onClickEvent(ev); }}
+                  className="absolute left-2 right-2 rounded-xl px-3 py-1.5 cursor-pointer hover:brightness-95 transition-all overflow-hidden"
+                  style={{ top: top + 1, height: height - 2, background: `${ev.color}22`, borderLeft: `3px solid ${ev.color}`, zIndex: 10 }}>
+                  <div className="flex items-start gap-1.5">
+                    <span className="text-[13px] flex-shrink-0">{emoji}</span>
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-semibold truncate" style={{ color: ev.color }}>{ev.title}</p>
+                      {height > 36 && (
+                        <p className="text-[10px] opacity-70" style={{ color: ev.color }}>
+                          {format(parseISO(ev.start_at), "HH:mm")} – {format(parseISO(ev.end_at), "HH:mm")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

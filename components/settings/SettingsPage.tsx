@@ -8,9 +8,11 @@ import {
   Moon, Apple, Activity, Settings, ChevronRight, User, Zap, Scale, Trophy,
 } from "lucide-react";
 import { DEFAULT_POINTS_CONFIG } from "@/lib/types";
+import type { CustomBadHabit } from "@/lib/types";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useDebouncedCallback } from "use-debounce";
 import type { UserSettings } from "@/lib/types";
+import { upsertSettings } from "@/lib/actions/settings";
 
 type SettingKey = keyof Omit<UserSettings, "id" | "user_id" | "updated_at">;
 
@@ -275,10 +277,21 @@ export default function SettingsPage() {
   const [height, setHeight] = useState(settings.height_cm || 175);
   const [age, setAge] = useState(settings.age || 25);
   const [activityLevel, setActivityLevel] = useState(settings.activity_level || "moderate");
+  const [editableConfig, setEditableConfig] = useState<Record<string, number>>({ ...DEFAULT_POINTS_CONFIG });
+  const [badHabits, setBadHabits] = useState<CustomBadHabit[]>([]);
+  const [newHabit, setNewHabit] = useState({ label: "", emoji: "🚬", points: -20 });
 
   useEffect(() => {
     setDisplayName(settings.display_name || "");
   }, [settings.display_name]);
+
+  useEffect(() => {
+    setEditableConfig({ ...DEFAULT_POINTS_CONFIG, ...(settings.custom_points_config || {}) });
+  }, [settings.custom_points_config]);
+
+  useEffect(() => {
+    setBadHabits(settings.custom_bad_habits || []);
+  }, [settings.custom_bad_habits]);
 
   useEffect(() => {
     const strava = searchParams.get("strava");
@@ -298,6 +311,11 @@ export default function SettingsPage() {
     await updateSetting("display_name", value);
     toast.success("Nom mis à jour", { duration: 1500 });
   }, 600);
+
+  const debouncedSaveConfig = useDebouncedCallback(async (config: Record<string, number>) => {
+    await upsertSettings({ custom_points_config: config } as any);
+    toast.success("Points mis à jour", { duration: 1500 });
+  }, 800);
 
   const currentSection = sections.find((s) => s.id === activeSection)!;
 
@@ -596,56 +614,195 @@ export default function SettingsPage() {
                   </div>
                 </div>
               ) : activeSection === "gamification" ? (
-                <div className="space-y-4">
-                  <p className="text-[13px] text-gray-500 leading-relaxed">
-                    Configure tes bonus et malus pour le système de points LockIn. Ces valeurs sont appliquées à chaque action enregistrée.
-                  </p>
-                  {Object.entries({
-                    seance_validee:   { label: "Séance validée", emoji: "🏋️", positive: true },
-                    objectif_eau:     { label: "Objectif eau atteint", emoji: "💧", positive: true },
-                    repas_sain:       { label: "Repas enregistré", emoji: "🥗", positive: true },
-                    supplement_check: { label: "Supplément pris", emoji: "💊", positive: true },
-                    uber_eats:        { label: "Uber Eats / Junk food", emoji: "🍔", positive: false },
-                    seance_manquee:   { label: "Séance manquée", emoji: "😴", positive: false },
-                    alcool:           { label: "Alcool", emoji: "🍺", positive: false },
-                  }).map(([key, conf]) => {
-                    const pts = DEFAULT_POINTS_CONFIG[key];
-                    const color = conf.positive ? "#34D399" : "#F87171";
-                    return (
-                      <div key={key} className="flex items-center gap-4 py-3 border-b border-black/4 last:border-0">
-                        <span className="text-xl">{conf.emoji}</span>
-                        <div className="flex-1">
-                          <p className="text-[13px] font-medium text-gray-700">{conf.label}</p>
-                          <p className="text-[11px] text-gray-400">Action {conf.positive ? "positive" : "négative"}</p>
+                <div className="space-y-6">
+                  {/* Built-in actions — editable points */}
+                  <div>
+                    <p className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Actions positives</p>
+                    <p className="text-[11px] text-gray-400 mb-3">Modifie la valeur en points de chaque action.</p>
+                    {Object.entries({
+                      seance_validee:   { label: "Séance validée", emoji: "🏋️", positive: true },
+                      objectif_eau:     { label: "Objectif eau atteint", emoji: "💧", positive: true },
+                      repas_sain:       { label: "Repas enregistré", emoji: "🥗", positive: true },
+                      supplement_check: { label: "Supplément pris", emoji: "💊", positive: true },
+                    }).map(([key, conf]) => {
+                      const color = "#34D399";
+                      return (
+                        <div key={key} className="flex items-center gap-4 py-3 border-b border-black/4 last:border-0">
+                          <span className="text-xl">{conf.emoji}</span>
+                          <p className="flex-1 text-[13px] font-medium text-gray-700">{conf.label}</p>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[12px] font-semibold text-gray-400">+</span>
+                            <input
+                              type="number"
+                              min={1} max={200} step={5}
+                              value={editableConfig[key] ?? DEFAULT_POINTS_CONFIG[key]}
+                              onChange={(e) => {
+                                const v = Number(e.target.value);
+                                const updated = { ...editableConfig, [key]: v };
+                                setEditableConfig(updated);
+                                debouncedSaveConfig(updated);
+                              }}
+                              className="w-16 text-center px-2 py-1.5 rounded-xl text-[13px] font-bold outline-none"
+                              style={{ background: "rgba(52,211,153,0.08)", border: "1.5px solid rgba(52,211,153,0.3)", color }}
+                            />
+                            <span className="text-[11px] text-gray-400">pts</span>
+                          </div>
                         </div>
-                        <span className="text-[15px] font-bold" style={{ color }}>
-                          {pts > 0 ? "+" : ""}{pts} pts
-                        </span>
+                      );
+                    })}
+                  </div>
+
+                  <div>
+                    <p className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-3">Actions négatives</p>
+                    {Object.entries({
+                      uber_eats:      { label: "Uber Eats / Junk food", emoji: "🍔" },
+                      seance_manquee: { label: "Séance manquée", emoji: "😴" },
+                      alcool:         { label: "Alcool", emoji: "🍺" },
+                    }).map(([key, conf]) => {
+                      const color = "#F87171";
+                      const currentVal = editableConfig[key] ?? DEFAULT_POINTS_CONFIG[key];
+                      return (
+                        <div key={key} className="flex items-center gap-4 py-3 border-b border-black/4 last:border-0">
+                          <span className="text-xl">{conf.emoji}</span>
+                          <p className="flex-1 text-[13px] font-medium text-gray-700">{conf.label}</p>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[12px] font-semibold text-gray-400">−</span>
+                            <input
+                              type="number"
+                              min={1} max={200} step={5}
+                              value={Math.abs(currentVal)}
+                              onChange={(e) => {
+                                const v = -Math.abs(Number(e.target.value));
+                                const updated = { ...editableConfig, [key]: v };
+                                setEditableConfig(updated);
+                                debouncedSaveConfig(updated);
+                              }}
+                              className="w-16 text-center px-2 py-1.5 rounded-xl text-[13px] font-bold outline-none"
+                              style={{ background: "rgba(248,113,113,0.08)", border: "1.5px solid rgba(248,113,113,0.3)", color }}
+                            />
+                            <span className="text-[11px] text-gray-400">pts</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Custom bad habits */}
+                  <div>
+                    <p className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide mb-3">Mauvaises habitudes personnalisées</p>
+                    {badHabits.length > 0 && (
+                      <div className="space-y-1.5 mb-4">
+                        {badHabits.map((habit) => (
+                          <div key={habit.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                            style={{ background: "rgba(248,113,113,0.06)", border: "1px solid rgba(248,113,113,0.15)" }}>
+                            <span className="text-lg">{habit.emoji}</span>
+                            <span className="flex-1 text-[13px] font-medium text-gray-700">{habit.label}</span>
+                            <span className="text-[13px] font-bold text-red-400">{habit.points} pts</span>
+                            <button
+                              onClick={async () => {
+                                const updated = badHabits.filter((h) => h.id !== habit.id);
+                                setBadHabits(updated);
+                                await upsertSettings({ custom_bad_habits: updated } as any);
+                                toast.success("Habitude supprimée");
+                              }}
+                              className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-red-100 transition-colors text-red-400 text-[14px]"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    );
-                  })}
-                  <div className="mt-4 p-4 rounded-2xl" style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)" }}>
+                    )}
+                    {/* Add form */}
+                    <div className="flex items-center gap-2 p-3 rounded-2xl"
+                      style={{ background: "rgba(0,0,0,0.03)", border: "1px dashed rgba(0,0,0,0.1)" }}>
+                      <input
+                        type="text"
+                        placeholder="Emoji"
+                        value={newHabit.emoji}
+                        onChange={(e) => setNewHabit((p) => ({ ...p, emoji: e.target.value }))}
+                        className="w-12 text-center px-1 py-1.5 rounded-xl text-[16px] bg-white border border-black/8 outline-none"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Nom de l'habitude"
+                        value={newHabit.label}
+                        onChange={(e) => setNewHabit((p) => ({ ...p, label: e.target.value }))}
+                        className="flex-1 px-3 py-1.5 rounded-xl text-[13px] bg-white border border-black/8 outline-none text-gray-700"
+                      />
+                      <div className="flex items-center gap-1">
+                        <span className="text-[12px] text-gray-400">−</span>
+                        <input
+                          type="number"
+                          min={1} max={200} step={5}
+                          value={Math.abs(newHabit.points)}
+                          onChange={(e) => setNewHabit((p) => ({ ...p, points: -Math.abs(Number(e.target.value)) }))}
+                          className="w-14 text-center px-2 py-1.5 rounded-xl text-[13px] font-bold bg-white border border-black/8 outline-none text-red-400"
+                        />
+                      </div>
+                      <button
+                        disabled={!newHabit.label.trim()}
+                        onClick={async () => {
+                          if (!newHabit.label.trim()) return;
+                          const habit: CustomBadHabit = { id: Date.now().toString(), ...newHabit };
+                          const updated = [...badHabits, habit];
+                          setBadHabits(updated);
+                          await upsertSettings({ custom_bad_habits: updated } as any);
+                          setNewHabit({ label: "", emoji: "🚬", points: -20 });
+                          toast.success("Habitude ajoutée");
+                        }}
+                        className="px-3 py-1.5 rounded-xl text-[12px] font-semibold text-white transition-all disabled:opacity-40"
+                        style={{ background: "linear-gradient(135deg, #F87171, #EF4444)" }}
+                      >
+                        + Ajouter
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Daily goal info */}
+                  <div className="p-4 rounded-2xl" style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)" }}>
                     <p className="text-[12px] font-semibold text-amber-700 mb-1">🎯 Objectif journalier</p>
                     <p className="text-[22px] font-bold text-amber-600">100 pts</p>
                     <p className="text-[11px] text-gray-500 mt-1">Atteins 100 pts/jour pour valider ta journée et maintenir ta série 🔥</p>
                   </div>
                 </div>
               ) : (
-                currentSection.fields.map((field) => (
-                  <SettingRow
-                    key={field.key}
-                    label={field.label}
-                    fieldKey={field.key}
-                    icon={field.icon}
-                    unit={field.unit}
-                    min={field.min}
-                    max={field.max}
-                    step={field.step}
-                    color={field.color}
-                    value={settings[field.key] as number}
-                    onChange={debouncedUpdate}
-                  />
-                ))
+                <>
+                  {currentSection.fields.map((field) => (
+                    <SettingRow
+                      key={field.key}
+                      label={field.label}
+                      fieldKey={field.key}
+                      icon={field.icon}
+                      unit={field.unit}
+                      min={field.min}
+                      max={field.max}
+                      step={field.step}
+                      color={field.color}
+                      value={settings[field.key] as number}
+                      onChange={debouncedUpdate}
+                    />
+                  ))}
+                  {activeSection === "sante" && (
+                    <div className="flex items-center gap-4 py-4 border-t border-black/4 mt-2">
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style={{ background: "rgba(129,140,248,0.12)" }}>
+                        <Moon className="w-4 h-4" style={{ color: "#818CF8" }} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-[13px] font-medium text-gray-700">Heure de coucher cible</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">Heure idéale pour aller dormir</p>
+                      </div>
+                      <input
+                        type="time"
+                        value={settings.sleep_target_time || "23:00"}
+                        onChange={(e) => updateSetting("sleep_target_time" as any, e.target.value)}
+                        className="px-3 py-2 rounded-xl text-[13px] font-semibold text-gray-700 outline-none"
+                        style={{ background: "rgba(129,140,248,0.08)", border: "1.5px solid rgba(129,140,248,0.3)", color: "#818CF8" }}
+                      />
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

@@ -1,33 +1,60 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { getTodayPoints, getMonthPoints, getStreakData, addPoints } from "@/lib/actions/points";
+import { getTodayPoints, getMonthPoints, getStreakData, addPoints, deletePoints } from "@/lib/actions/points";
 import type { PointRecord } from "@/lib/types";
 import { DEFAULT_POINTS_CONFIG } from "@/lib/types";
 import { toast } from "sonner";
-import { Flame, Zap, Trophy, TrendingUp } from "lucide-react";
+import { Flame, Zap, Trophy, TrendingUp, Trash2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useSettings } from "@/contexts/SettingsContext";
 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } };
 const item = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring" as const, bounce: 0.3 } } };
 
 const DAILY_GOAL = 100;
 
-const ACTION_LABELS: Record<string, { label: string; emoji: string; points: number }> = {
-  seance_validee:    { label: "Séance validée", emoji: "🏋️", points: DEFAULT_POINTS_CONFIG.seance_validee },
-  objectif_eau:      { label: "Objectif eau atteint", emoji: "💧", points: DEFAULT_POINTS_CONFIG.objectif_eau },
-  repas_sain:        { label: "Repas enregistré", emoji: "🥗", points: DEFAULT_POINTS_CONFIG.repas_sain },
-  supplement_check:  { label: "Supplément pris", emoji: "💊", points: DEFAULT_POINTS_CONFIG.supplement_check },
-  uber_eats:         { label: "Uber Eats / Junk food", emoji: "🍔", points: DEFAULT_POINTS_CONFIG.uber_eats },
-  seance_manquee:    { label: "Séance manquée", emoji: "😴", points: DEFAULT_POINTS_CONFIG.seance_manquee },
-  alcool:            { label: "Alcool", emoji: "🍺", points: DEFAULT_POINTS_CONFIG.alcool },
+const BASE_ACTIONS: Record<string, { label: string; emoji: string }> = {
+  seance_validee:    { label: "Séance validée", emoji: "🏋️" },
+  objectif_eau:      { label: "Objectif eau atteint", emoji: "💧" },
+  repas_sain:        { label: "Repas enregistré", emoji: "🥗" },
+  supplement_check:  { label: "Supplément pris", emoji: "💊" },
+  uber_eats:         { label: "Uber Eats / Junk food", emoji: "🍔" },
+  seance_manquee:    { label: "Séance manquée", emoji: "😴" },
+  alcool:            { label: "Alcool", emoji: "🍺" },
 };
 
 export default function ScorePage() {
+  const { settings } = useSettings();
   const [loading, setLoading] = useState(true);
   const [todayTotal, setTodayTotal] = useState(0);
   const [todayRecords, setTodayRecords] = useState<PointRecord[]>([]);
   const [monthTotal, setMonthTotal] = useState(0);
-  const [streak, setStreak] = useState({ currentStreak: 0, bestStreak: 0, successRate: 0, last30Days: [] as { date: string; points: number; success: boolean }[] });
+  const [streak, setStreak] = useState({
+    currentStreak: 0,
+    bestStreak: 0,
+    successRate: 0,
+    last30Days: [] as { date: string; points: number; success: boolean }[],
+  });
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Dynamic config: user overrides + custom bad habits
+  const effectiveConfig = { ...DEFAULT_POINTS_CONFIG, ...(settings.custom_points_config || {}) };
+  const customBadHabits = settings.custom_bad_habits || [];
+
+  const actionLabels: Record<string, { label: string; emoji: string; points: number }> = {};
+  for (const [key, base] of Object.entries(BASE_ACTIONS)) {
+    actionLabels[key] = { ...base, points: effectiveConfig[key] ?? 0 };
+  }
+  for (const habit of customBadHabits) {
+    actionLabels[habit.id] = { label: habit.label, emoji: habit.emoji, points: habit.points };
+  }
+
+  const loadToday = useCallback(async () => {
+    const today = await getTodayPoints();
+    setTodayTotal(today.total);
+    setTodayRecords(today.records);
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -45,14 +72,39 @@ export default function ScorePage() {
 
   useEffect(() => { load(); }, []);
 
+  // Realtime — sync score quand points ajoutés depuis d'autres pages (Nutrition, Sport…)
+  useEffect(() => {
+    const channel = supabase
+      .channel("score-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "points_history" }, () => {
+        loadToday();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [loadToday]);
+
   const handleManualAction = async (action: string) => {
-    const conf = ACTION_LABELS[action];
+    const conf = actionLabels[action];
     if (!conf) return;
     const rec = await addPoints(action, conf.label, conf.points);
     setTodayTotal((prev) => prev + conf.points);
     setTodayRecords((prev) => [rec, ...prev]);
-    if (conf.points > 0) toast.success(`${conf.emoji} ${conf.label} — ${conf.points > 0 ? "+" : ""}${conf.points} pts`);
+    if (conf.points > 0) toast.success(`${conf.emoji} ${conf.label} — +${conf.points} pts`);
     else toast.error(`${conf.emoji} ${conf.label} — ${conf.points} pts`);
+  };
+
+  const handleDelete = async (rec: PointRecord) => {
+    setDeletingId(rec.id);
+    try {
+      await deletePoints(rec.id);
+      setTodayRecords((prev) => prev.filter((r) => r.id !== rec.id));
+      setTodayTotal((prev) => prev - rec.points);
+      toast.success("Action retirée du journal");
+    } catch {
+      toast.error("Erreur lors de la suppression");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const scorePct = Math.min((todayTotal / DAILY_GOAL) * 100, 100);
@@ -99,7 +151,7 @@ export default function ScorePage() {
       </motion.div>
 
       <div className="grid grid-cols-12 gap-5">
-        {/* Today's score visual */}
+        {/* Today's score — ring */}
         <motion.div variants={item} className="col-span-4">
           <div className="card h-full flex flex-col items-center justify-center py-6">
             <div className="relative mb-4" style={{ width: 180, height: 180 }}>
@@ -150,7 +202,7 @@ export default function ScorePage() {
                       animate={{ scale: 1 }}
                       transition={{ delay: i * 0.015 }}
                       title={`${day.date}: ${day.points} pts`}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-medium relative"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-medium"
                       style={{
                         background: day.success ? `${scoreColor}25` : "rgba(0,0,0,0.04)",
                         border: isToday ? `2px solid ${scoreColor}` : day.success ? `1px solid ${scoreColor}40` : "1px solid transparent",
@@ -170,7 +222,7 @@ export default function ScorePage() {
           <div className="card h-full">
             <h2 className="text-[14px] font-semibold text-gray-800 mb-4">Actions manuelles</h2>
             <div className="space-y-1.5">
-              {Object.entries(ACTION_LABELS).map(([action, conf]) => (
+              {Object.entries(actionLabels).map(([action, conf]) => (
                 <motion.button key={action} onClick={() => handleManualAction(action)}
                   whileHover={{ x: 2 }} whileTap={{ scale: 0.97 }}
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all hover:bg-black/3">
@@ -186,37 +238,54 @@ export default function ScorePage() {
           </div>
         </motion.div>
 
-        {/* Today's log */}
+        {/* Today's log — with delete */}
         <motion.div variants={item} className="col-span-12">
           <div className="card">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-[14px] font-semibold text-gray-800">Journal du jour</h2>
-              <span className="text-[12px] text-gray-400">{todayTotal} pts total</span>
+              <span className="text-[12px] text-gray-400">{todayTotal} pts total · {todayRecords.length} action{todayRecords.length !== 1 ? "s" : ""}</span>
             </div>
             {todayRecords.length === 0 ? (
               <p className="text-[13px] text-gray-400 py-4 text-center">Aucune action aujourd'hui — commence ta journée !</p>
             ) : (
               <div className="space-y-1">
-                {todayRecords.map((rec, i) => (
-                  <motion.div key={rec.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.03 }}
-                    className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-black/3 transition-colors">
-                    <span className="text-[18px]">{ACTION_LABELS[rec.action]?.emoji || "⚡"}</span>
-                    <span className="flex-1 text-[13px] text-gray-700">{rec.label}</span>
-                    <span className="text-[11px] text-gray-400">
-                      {new Date(rec.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                    <span className="text-[13px] font-semibold w-14 text-right"
-                      style={{ color: rec.points > 0 ? "#34D399" : "#F87171" }}>
-                      {rec.points > 0 ? "+" : ""}{rec.points} pts
-                    </span>
-                  </motion.div>
-                ))}
+                {todayRecords.map((rec, i) => {
+                  const display = actionLabels[rec.action];
+                  return (
+                    <motion.div key={rec.id}
+                      initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.03 }}
+                      className="group flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-black/3 transition-colors">
+                      <span className="text-[18px]">{display?.emoji || "⚡"}</span>
+                      <span className="flex-1 text-[13px] text-gray-700">{rec.label}</span>
+                      <span className="text-[11px] text-gray-400">
+                        {new Date(rec.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      <span className="text-[13px] font-semibold w-14 text-right"
+                        style={{ color: rec.points > 0 ? "#34D399" : "#F87171" }}>
+                        {rec.points > 0 ? "+" : ""}{rec.points} pts
+                      </span>
+                      <motion.button
+                        onClick={() => handleDelete(rec)}
+                        disabled={deletingId === rec.id}
+                        whileTap={{ scale: 0.9 }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      </motion.button>
+                    </motion.div>
+                  );
+                })}
               </div>
             )}
           </div>
         </motion.div>
       </div>
+
+      {/* Month total info */}
+      <motion.div variants={item} className="flex justify-end">
+        <p className="text-[12px] text-gray-400">Total du mois : <span className="font-semibold text-gray-600">{monthTotal} pts</span></p>
+      </motion.div>
     </motion.div>
   );
 }

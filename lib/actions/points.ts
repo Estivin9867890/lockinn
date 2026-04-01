@@ -20,6 +20,18 @@ export async function addPoints(action: string, label: string, customPoints?: nu
   return row as PointRecord;
 }
 
+export async function deletePoints(id: string): Promise<void> {
+  const { sb, user } = await requireUser();
+  const { error } = await sb
+    .from("points_history")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+  revalidatePath("/score");
+}
+
 export async function getTodayPoints(): Promise<{ total: number; records: PointRecord[] }> {
   const { sb, user } = await requireUser();
   const { data } = await sb
