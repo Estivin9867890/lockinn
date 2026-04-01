@@ -129,7 +129,7 @@ export const FOOD_LIBRARY: FoodItem[] = [
   { name: "Beurre de Cacahuète en Poudre", category: "Suppléments", protein_g: 47, carbs_g: 27, fat_g: 10 },
 ];
 
-export const FOOD_CATEGORIES = [...new Set(FOOD_LIBRARY.map((f) => f.category))];
+export const FOOD_CATEGORIES = Array.from(new Set(FOOD_LIBRARY.map((f) => f.category)));
 
 export function searchFoods(query: string, limit = 10): FoodItem[] {
   if (!query || query.length < 1) return FOOD_LIBRARY.slice(0, limit);
