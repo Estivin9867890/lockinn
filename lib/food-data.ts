@@ -1,4 +1,5 @@
 import type { FoodItem } from "./types";
+export type { FoodItem };
 
 export const FOOD_LIBRARY: FoodItem[] = [
   // ─── Viandes & Volailles (pour 100g cuit) ───────────────────────────────
