@@ -382,6 +382,50 @@ export interface Challenge {
   created_at: string;
 }
 
+// ─── Sommeil ─────────────────────────────────────────────────────────────────
+
+export interface SleepLog {
+  id: string;
+  user_id: string;
+  date: string;
+  bedtime: string;       // "23:00"
+  wake_time: string;     // "07:00"
+  duration_min: number;
+  quality: number;       // 1-10
+  score: number;         // 0-100
+  notes?: string | null;
+  created_at: string;
+}
+
+// ─── Investissements ─────────────────────────────────────────────────────────
+
+export interface Investment {
+  id: string;
+  user_id: string;
+  name: string;
+  ticker?: string;
+  category: "action" | "crypto" | "immobilier" | "autre";
+  amount_eur: number;
+  quantity?: number;
+  buy_price?: number;
+  current_price?: number;
+  date: string;
+  notes?: string | null;
+  created_at: string;
+}
+
+// ─── Snapshot / Mémoire ──────────────────────────────────────────────────────
+
+export interface Snapshot {
+  id: string;
+  user_id: string;
+  date: string;
+  phrase: string;
+  photo_url?: string | null;
+  mood: number; // 1-5
+  created_at: string;
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 export const SPORT_TYPES = ["run", "bike", "skate", "climb", "gym"] as const;

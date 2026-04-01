@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import CommandBar from "@/components/CommandBar";
+import DynamicIsland from "@/components/DynamicIsland";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const [commandOpen, setCommandOpen] = useState(false);
@@ -36,6 +37,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         />
       </div>
 
+      <DynamicIsland />
       <Sidebar onCommandOpen={() => setCommandOpen(true)} />
 
       <main className="flex-1 ml-[240px] min-h-screen overflow-auto">

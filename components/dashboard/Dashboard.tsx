@@ -201,6 +201,15 @@ export default function Dashboard() {
       info: "Quêtes & Easter Eggs",
       sub: "Récompenses cachées 🥚",
     },
+    {
+      href: "/sleep",
+      emoji: "😴",
+      label: "Sommeil",
+      color: "#5B9CF6",
+      gradient: "linear-gradient(135deg, rgba(91,156,246,0.12), rgba(91,156,246,0.04))",
+      info: "Sleep Score",
+      sub: "Roue circadienne · Qualité",
+    },
   ];
 
   const handleModuleClick = (href: string) => {

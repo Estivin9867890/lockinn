@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import {
   LayoutDashboard, MapPin, Apple, Wallet, Film,
   Package, Command, Zap, Settings, LogOut, Calendar, StickyNote, Flame,
-  FolderOpen, Trophy,
+  FolderOpen, Trophy, Moon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -18,6 +18,7 @@ const navItems = [
   { href: "/challenges", label: "Défis", icon: Trophy, color: "#A78BFA" },
   { href: "/projects", label: "Projets", icon: FolderOpen, color: "#34D399" },
   { href: "/calendar", label: "Calendrier", icon: Calendar, color: "#FB923C" },
+  { href: "/sleep", label: "Sommeil", icon: Moon, color: "#5B9CF6" },
   { href: "/memo", label: "Mémo", icon: StickyNote, color: "#FBBF24" },
   { href: "/sport", label: "Sport", icon: MapPin, color: "#34D399" },
   { href: "/nutrition", label: "Nutrition", icon: Apple, color: "#FB923C" },

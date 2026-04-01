@@ -1,13 +1,14 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { getTodayPoints, getMonthPoints, getStreakData, addPoints, deletePoints } from "@/lib/actions/points";
 import type { PointRecord } from "@/lib/types";
 import { DEFAULT_POINTS_CONFIG } from "@/lib/types";
 import { toast } from "sonner";
-import { Flame, Zap, Trophy, TrendingUp, Trash2 } from "lucide-react";
+import { Flame, Zap, Trophy, TrendingUp, Trash2, Tv } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useSettings } from "@/contexts/SettingsContext";
+import WeeklyWrapped, { type WeeklyStats } from "./WeeklyWrapped";
 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } };
 const item = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring" as const, bounce: 0.3 } } };
@@ -37,6 +38,8 @@ export default function ScorePage() {
     last30Days: [] as { date: string; points: number; success: boolean }[],
   });
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showWrapped, setShowWrapped] = useState(false);
+  const [wrappedStats, setWrappedStats] = useState<WeeklyStats | null>(null);
 
   // Dynamic config: user overrides + custom bad habits
   const effectiveConfig = { ...DEFAULT_POINTS_CONFIG, ...(settings.custom_points_config || {}) };
@@ -70,7 +73,42 @@ export default function ScorePage() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    // Weekly Wrapped — show on Sundays after 18:00 (once per week)
+    const now = new Date();
+    const isSunday = now.getDay() === 0;
+    const isEvening = now.getHours() >= 18;
+    if (isSunday && isEvening) {
+      const weekKey = `wrapped_${now.toISOString().slice(0, 10)}`;
+      if (!localStorage.getItem(weekKey)) {
+        localStorage.setItem(weekKey, "1");
+        // Build wrapped stats from streak data (computed after load)
+        setTimeout(async () => {
+          const [today, month, streakData] = await Promise.all([
+            getTodayPoints(),
+            getMonthPoints(),
+            getStreakData(DAILY_GOAL),
+          ]);
+          const weekPts = streakData.last30Days.slice(0, 7).reduce((a, d) => a + d.points, 0);
+          const bestDayObj = streakData.last30Days.slice(0, 7).reduce(
+            (best, d) => d.points > best.points ? d : best,
+            { date: now.toISOString().split("T")[0], points: 0 }
+          );
+          const successDays = streakData.last30Days.slice(0, 7).filter(d => d.success).length;
+          setWrappedStats({
+            totalPoints: weekPts,
+            bestDay: bestDayObj,
+            workouts: 0, // would need sport_sessions query
+            successRate: Math.round((successDays / 7) * 100),
+            streak: streakData.currentStreak,
+            waterDays: 0,
+          });
+          setShowWrapped(true);
+        }, 1200);
+      }
+    }
+  }, []);
 
   // Realtime — sync score quand points ajoutés depuis d'autres pages (Nutrition, Sport…)
   useEffect(() => {
@@ -121,10 +159,40 @@ export default function ScorePage() {
 
   return (
     <motion.div className="space-y-6" variants={container} initial="hidden" animate="show">
+      {/* Weekly Wrapped modal */}
+      <AnimatePresence>
+        {showWrapped && wrappedStats && (
+          <WeeklyWrapped stats={wrappedStats} onClose={() => setShowWrapped(false)} />
+        )}
+      </AnimatePresence>
+
       {/* Header */}
-      <motion.div variants={item}>
-        <p className="text-[13px] font-medium text-gray-400">Gamification</p>
-        <h1 className="text-[28px] font-semibold text-gray-900 tracking-tight mt-0.5">Score LockIn ⚡</h1>
+      <motion.div variants={item} className="flex items-end justify-between">
+        <div>
+          <p className="text-[13px] font-medium text-gray-400">Gamification</p>
+          <h1 className="text-[28px] font-semibold text-gray-900 tracking-tight mt-0.5">Score LockIn ⚡</h1>
+        </div>
+        <button onClick={() => {
+          const now = new Date();
+          const weekPts = streak.last30Days.slice(0, 7).reduce((a, d) => a + d.points, 0);
+          const bestDay = streak.last30Days.slice(0, 7).reduce(
+            (best, d) => d.points > best.points ? d : best,
+            { date: now.toISOString().split("T")[0], points: 0 }
+          );
+          setWrappedStats({
+            totalPoints: weekPts,
+            bestDay,
+            workouts: 0,
+            successRate: Math.round((streak.last30Days.slice(0, 7).filter(d => d.success).length / 7) * 100),
+            streak: streak.currentStreak,
+            waterDays: 0,
+          });
+          setShowWrapped(true);
+        }}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-[12px] font-semibold text-white"
+          style={{ background: "linear-gradient(135deg, #7C3AED, #A78BFA)", boxShadow: "0 4px 12px rgba(124,58,237,0.3)" }}>
+          <Tv className="w-3.5 h-3.5" /> Weekly Wrapped
+        </button>
       </motion.div>
 
       {/* KPI Cards */}
