@@ -107,6 +107,7 @@ export interface SportSession {
   type: string;
   duration_min: number;
   calories?: number;
+  feeling?: number; // 1-10
   spot_id?: string;
   notes?: string;
   strava_activity_id?: number;
@@ -198,6 +199,105 @@ export interface StravaActivity {
   total_elevation_gain: number;
   start_latlng?: [number, number];
   calories?: number;
+}
+
+// ─── Workout Program ────────────────────────────────────────────────────────
+
+export interface WorkoutExercise {
+  name: string;
+  sets: number;
+  reps: string;
+  weight?: string;
+}
+
+export interface WorkoutDay {
+  id: string;
+  user_id: string;
+  day_of_week: number; // 0=Lun, 6=Dim
+  label: string;
+  exercises: WorkoutExercise[];
+  created_at: string;
+}
+
+// ─── PR Tracker ─────────────────────────────────────────────────────────────
+
+export interface PRRecord {
+  id: string;
+  user_id: string;
+  exercise: string;
+  weight_kg?: number;
+  reps?: number;
+  date: string;
+  notes?: string;
+  created_at: string;
+}
+
+// ─── Food Library ───────────────────────────────────────────────────────────
+
+export interface FoodItem {
+  name: string;
+  category: string;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}
+
+// ─── Meal Ingredients ───────────────────────────────────────────────────────
+
+export interface MealIngredient {
+  id: string;
+  meal_id: string;
+  food_name: string;
+  weight_g: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  calories: number;
+  created_at: string;
+}
+
+// ─── Gamification ───────────────────────────────────────────────────────────
+
+export interface PointRecord {
+  id: string;
+  user_id: string;
+  date: string;
+  action: string;
+  label: string;
+  points: number;
+  created_at: string;
+}
+
+export const DEFAULT_POINTS_CONFIG: Record<string, number> = {
+  seance_validee: 50,
+  objectif_eau: 10,
+  repas_sain: 15,
+  supplement_check: 5,
+  uber_eats: -30,
+  seance_manquee: -20,
+  alcool: -25,
+};
+
+// ─── Supplements ────────────────────────────────────────────────────────────
+
+export interface Supplement {
+  id: string;
+  user_id: string;
+  name: string;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  has_macros: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface SupplementLog {
+  id: string;
+  user_id: string;
+  supplement_id: string;
+  date: string;
+  created_at: string;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

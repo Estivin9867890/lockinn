@@ -1,81 +1,80 @@
 "use client";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { Plus, Filter, MapPin, Dumbbell } from "lucide-react";
-import dynamic from "next/dynamic";
+import { motion, AnimatePresence } from "framer-motion";
+import { Plus, Trash2, Trophy, Calendar, Dumbbell, Edit3, Check } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
-import { addSpot, addSession, deleteSession } from "@/lib/actions/sport";
+import { addSession, deleteSession } from "@/lib/actions/sport";
+import { getPRs, addPR, deletePR } from "@/lib/actions/pr";
+import { getWeeklyProgram, upsertWorkoutDay, deleteWorkoutDay } from "@/lib/actions/program";
+import { addPoints } from "@/lib/actions/points";
 import EmptyState from "@/components/ui/EmptyState";
-import { CardSkeleton, KPIRowSkeleton, TableRowSkeleton } from "@/components/ui/Skeleton";
+import { CardSkeleton, KPIRowSkeleton } from "@/components/ui/Skeleton";
 import Modal, { FormField, FormInput, FormSelect, FormTextarea, SubmitButton } from "@/components/ui/Modal";
-import type { SportSpot, SportSession } from "@/lib/types";
-import { SPORT_LABELS, SPORT_EMOJIS, SPORT_COLORS, SPORT_TYPES } from "@/lib/types";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-
-const MapComponent = dynamic(() => import("@/components/MapComponent"), { ssr: false });
+import type { SportSession, PRRecord, WorkoutDay, WorkoutExercise } from "@/lib/types";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const SESSION_EMOJI: Record<string, string> = {
   Course: "🏃", Vélo: "🚴", Muscu: "🏋️", Escalade: "🧗", Skate: "🛹",
   Yoga: "🧘", Natation: "🏊", Autre: "💪",
-  run: "🏃", bike: "🚴", gym: "🏋️", climb: "🧗", skate: "🛹",
 };
+
+const WEEK_DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+const SESSION_TYPES = ["Course", "Vélo", "Muscu", "Escalade", "Skate", "Yoga", "Natation", "Autre"];
 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } };
 const item = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring" as const, bounce: 0.3 } } };
 
+type Tab = "sessions" | "programme" | "records";
+
 export default function SportPage() {
-  const [spots, setSpots] = useState<SportSpot[]>([]);
+  const [tab, setTab] = useState<Tab>("sessions");
   const [sessions, setSessions] = useState<SportSession[]>([]);
+  const [prs, setPrs] = useState<PRRecord[]>([]);
+  const [program, setProgram] = useState<WorkoutDay[]>([]);
   const [loading, setLoading] = useState(true);
-  const [spotModal, setSpotModal] = useState(false);
+
+  // Session modal
   const [sessionModal, setSessionModal] = useState(false);
   const [pending, setPending] = useState(false);
-
-  // Spot form
-  const [spotName, setSpotName] = useState("");
-  const [spotLat, setSpotLat] = useState("");
-  const [spotLng, setSpotLng] = useState("");
-  const [spotType, setSpotType] = useState("run");
-  const [spotDist, setSpotDist] = useState("");
-  const [spotNotes, setSpotNotes] = useState("");
-
-  // Session form
   const [sesDate, setSesDate] = useState(new Date().toISOString().split("T")[0]);
-  const [sesType, setSesType] = useState("Course");
+  const [sesType, setSesType] = useState("Muscu");
   const [sesDuration, setSesDuration] = useState("");
-  const [sesCalories, setSesCalories] = useState("");
+  const [sesFeeling, setSesFeeling] = useState(7);
+  const [sesNotes, setSesNotes] = useState("");
+
+  // PR modal
+  const [prModal, setPrModal] = useState(false);
+  const [prExercise, setPrExercise] = useState("");
+  const [prWeight, setPrWeight] = useState("");
+  const [prReps, setPrReps] = useState("");
+  const [prDate, setPrDate] = useState(new Date().toISOString().split("T")[0]);
+  const [prNotes, setPrNotes] = useState("");
+
+  // Program modal
+  const [programModal, setProgramModal] = useState(false);
+  const [editingDay, setEditingDay] = useState<number>(0);
+  const [dayLabel, setDayLabel] = useState("");
+  const [exercises, setExercises] = useState<WorkoutExercise[]>([
+    { name: "", sets: 4, reps: "8-12", weight: "" },
+  ]);
 
   const load = async () => {
-    const [sp, se] = await Promise.all([
-      supabase.from("sport_spots").select("*").order("created_at", { ascending: false }),
-      supabase.from("sport_sessions").select("*").order("date", { ascending: false }).limit(20),
+    setLoading(true);
+    const [se, pr, pg] = await Promise.all([
+      supabase.from("sport_sessions").select("*").order("date", { ascending: false }).limit(30),
+      getPRs(),
+      getWeeklyProgram(),
     ]);
-    setSpots(sp.data || []);
     setSessions(se.data || []);
+    setPrs(pr);
+    setProgram(pg);
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
 
-  const handleAddSpot = async () => {
-    if (!spotName || !spotLat || !spotLng) return;
-    setPending(true);
-    try {
-      const newSpot = await addSpot({
-        name: spotName, lat: parseFloat(spotLat), lng: parseFloat(spotLng),
-        type: spotType as SportSpot["type"],
-        distance_km: spotDist ? parseFloat(spotDist) : undefined,
-        notes: spotNotes || undefined,
-      });
-      setSpots((prev) => [newSpot, ...prev]);
-      toast.success("📍 Spot ajouté !");
-      setSpotModal(false);
-      setSpotName(""); setSpotLat(""); setSpotLng(""); setSpotDist(""); setSpotNotes("");
-    } catch { toast.error("Erreur lors de l'ajout"); }
-    setPending(false);
-  };
-
+  // Session handlers
   const handleAddSession = async () => {
     if (!sesDuration) return;
     setPending(true);
@@ -83,42 +82,114 @@ export default function SportPage() {
       const newSes = await addSession({
         date: sesDate, type: sesType,
         duration_min: parseInt(sesDuration),
-        calories: sesCalories ? parseInt(sesCalories) : undefined,
+        feeling: sesFeeling,
+        notes: sesNotes || undefined,
       });
       setSessions((prev) => [newSes, ...prev]);
-      toast.success("💪 Session enregistrée !");
+      await addPoints("seance_validee", `Session ${sesType} — ${sesDuration}min`);
+      toast.success("💪 Session enregistrée ! +50 pts");
       setSessionModal(false);
-      setSesDuration(""); setSesCalories("");
+      setSesDuration(""); setSesNotes(""); setSesFeeling(7);
     } catch { toast.error("Erreur lors de l'ajout"); }
     setPending(false);
   };
 
-  // Build weekly chart data
-  const weekDays = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-  const now = new Date();
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-  const weekData = weekDays.map((day, i) => {
-    const d = new Date(startOfWeek);
-    d.setDate(startOfWeek.getDate() + i);
-    const dateStr = d.toISOString().split("T")[0];
-    const ses = sessions.filter((s) => s.date === dateStr);
-    return { day, calories: ses.reduce((s, x) => s + (x.calories || 0), 0), sessions: ses.length };
-  });
+  const handleDeleteSession = async (id: string) => {
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+    try { await deleteSession(id); toast.success("Session supprimée"); }
+    catch { load(); }
+  };
 
-  const totalCal = sessions.reduce((s, x) => s + (x.calories || 0), 0);
+  // PR handlers
+  const handleAddPR = async () => {
+    if (!prExercise) return;
+    setPending(true);
+    try {
+      const newPR = await addPR({
+        exercise: prExercise,
+        weight_kg: prWeight ? parseFloat(prWeight) : undefined,
+        reps: prReps ? parseInt(prReps) : undefined,
+        date: prDate,
+        notes: prNotes || undefined,
+      });
+      setPrs((prev) => [newPR, ...prev]);
+      toast.success("🏆 Record enregistré !");
+      setPrModal(false);
+      setPrExercise(""); setPrWeight(""); setPrReps(""); setPrNotes("");
+    } catch { toast.error("Erreur lors de l'ajout"); }
+    setPending(false);
+  };
+
+  const handleDeletePR = async (id: string) => {
+    setPrs((prev) => prev.filter((p) => p.id !== id));
+    try { await deletePR(id); }
+    catch { load(); }
+  };
+
+  // Program handlers
+  const openProgramModal = (dayIndex: number) => {
+    const existing = program.find((p) => p.day_of_week === dayIndex);
+    setEditingDay(dayIndex);
+    setDayLabel(existing?.label || "");
+    setExercises(existing?.exercises?.length ? existing.exercises : [{ name: "", sets: 4, reps: "8-12", weight: "" }]);
+    setProgramModal(true);
+  };
+
+  const handleSaveDay = async () => {
+    const validExercises = exercises.filter((e) => e.name.trim());
+    if (!dayLabel.trim() && validExercises.length === 0) return;
+    setPending(true);
+    try {
+      const updated = await upsertWorkoutDay(editingDay, dayLabel || WEEK_DAYS[editingDay], validExercises);
+      setProgram((prev) => {
+        const filtered = prev.filter((p) => p.day_of_week !== editingDay);
+        return [...filtered, updated].sort((a, b) => a.day_of_week - b.day_of_week);
+      });
+      toast.success("Programme mis à jour !");
+      setProgramModal(false);
+    } catch { toast.error("Erreur lors de la sauvegarde"); }
+    setPending(false);
+  };
+
+  const addExercise = () => setExercises((prev) => [...prev, { name: "", sets: 4, reps: "8-12", weight: "" }]);
+  const removeExercise = (i: number) => setExercises((prev) => prev.filter((_, idx) => idx !== i));
+  const updateExercise = (i: number, field: keyof WorkoutExercise, value: string | number) =>
+    setExercises((prev) => prev.map((e, idx) => idx === i ? { ...e, [field]: value } : e));
+
+  // Stats
+  const avgFeeling = sessions.filter((s) => s.feeling).length > 0
+    ? (sessions.filter((s) => s.feeling).reduce((s, x) => s + (x.feeling || 0), 0) / sessions.filter((s) => s.feeling).length).toFixed(1)
+    : "—";
   const totalMin = sessions.reduce((s, x) => s + x.duration_min, 0);
+  const thisMonthCount = sessions.filter((s) => s.date?.startsWith(new Date().toISOString().slice(0, 7))).length;
+
+  // Feeling chart data (last 10 sessions with feeling)
+  const feelingData = sessions
+    .filter((s) => s.feeling)
+    .slice(0, 10)
+    .reverse()
+    .map((s, i) => ({ i: i + 1, feeling: s.feeling, type: s.type, date: s.date }));
+
+  // Group PRs by exercise (best record)
+  const prByExercise: Record<string, PRRecord[]> = {};
+  for (const pr of prs) {
+    if (!prByExercise[pr.exercise]) prByExercise[pr.exercise] = [];
+    prByExercise[pr.exercise].push(pr);
+  }
 
   if (loading) return (
     <div className="space-y-6">
       <div className="h-10 w-48 skeleton rounded-xl" />
       <KPIRowSkeleton cols={4} />
-      <div className="grid grid-cols-12 gap-5">
-        <div className="col-span-8"><CardSkeleton className="h-80" /></div>
-        <div className="col-span-4 space-y-4"><CardSkeleton /><CardSkeleton /></div>
-      </div>
+      <CardSkeleton className="h-80" />
     </div>
   );
+
+  const TABS: { id: Tab; label: string; icon: any }[] = [
+    { id: "sessions", label: "Sessions", icon: Dumbbell },
+    { id: "programme", label: "Programme", icon: Calendar },
+    { id: "records", label: "Records", icon: Trophy },
+  ];
 
   return (
     <motion.div className="space-y-6" variants={container} initial="hidden" animate="show">
@@ -126,30 +197,34 @@ export default function SportPage() {
       <motion.div variants={item} className="flex items-end justify-between">
         <div>
           <p className="text-[13px] font-medium text-gray-400">Catégorie</p>
-          <h1 className="text-[28px] font-semibold text-gray-900 tracking-tight mt-0.5">Sport & Carte 🗺️</h1>
+          <h1 className="text-[28px] font-semibold text-gray-900 tracking-tight mt-0.5">Sport 🏋️</h1>
         </div>
         <div className="flex items-center gap-2">
-          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-            onClick={() => setSessionModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[13px] font-medium"
-            style={{ background: "linear-gradient(135deg, #5B9CF6, #818CF8)", boxShadow: "0 4px 16px rgba(91,156,246,0.35)" }}>
-            <Plus className="w-4 h-4" /> Session
-          </motion.button>
-          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-            onClick={() => setSpotModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[13px] font-medium"
-            style={{ background: "linear-gradient(135deg, #34D399, #10B981)", boxShadow: "0 4px 16px rgba(52,211,153,0.35)" }}>
-            <Plus className="w-4 h-4" /> Spot
-          </motion.button>
+          {tab === "sessions" && (
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              onClick={() => setSessionModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[13px] font-medium"
+              style={{ background: "linear-gradient(135deg, #34D399, #10B981)", boxShadow: "0 4px 16px rgba(52,211,153,0.35)" }}>
+              <Plus className="w-4 h-4" /> Session
+            </motion.button>
+          )}
+          {tab === "records" && (
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              onClick={() => setPrModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[13px] font-medium"
+              style={{ background: "linear-gradient(135deg, #F59E0B, #D97706)", boxShadow: "0 4px 16px rgba(245,158,11,0.35)" }}>
+              <Plus className="w-4 h-4" /> Nouveau Record
+            </motion.button>
+          )}
         </div>
       </motion.div>
 
       {/* KPIs */}
       <motion.div variants={item} className="grid grid-cols-4 gap-4">
         {[
-          { label: "Spots enregistrés", value: spots.length, icon: "📍", color: "#5B9CF6" },
-          { label: "Sessions ce mois", value: sessions.length, icon: "🏋️", color: "#34D399" },
-          { label: "Calories brûlées", value: totalCal.toLocaleString("fr-FR"), icon: "🔥", color: "#FB923C" },
+          { label: "Sessions ce mois", value: thisMonthCount, icon: "🏋️", color: "#34D399" },
+          { label: "Ressenti moyen", value: avgFeeling !== "—" ? `${avgFeeling}/10` : "—", icon: "💯", color: "#5B9CF6" },
+          { label: "Records enregistrés", value: Object.keys(prByExercise).length, icon: "🏆", color: "#F59E0B" },
           { label: "Temps total", value: `${Math.floor(totalMin / 60)}h${totalMin % 60}m`, icon: "⏱️", color: "#A78BFA" },
         ].map((kpi) => (
           <motion.div key={kpi.label} whileHover={{ y: -2 }} className="card">
@@ -160,128 +235,206 @@ export default function SportPage() {
         ))}
       </motion.div>
 
-      <div className="grid grid-cols-12 gap-5">
-        {/* Map */}
-        <motion.div variants={item} className="col-span-8">
-          <div className="card" style={{ height: 480 }}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[15px] font-semibold text-gray-800">Carte des spots</h2>
-              <span className="text-[12px] text-gray-400">{spots.length} spot{spots.length !== 1 ? "s" : ""}</span>
-            </div>
-            <div style={{ height: "calc(100% - 50px)" }}>
-              <MapComponent compact={false} spots={spots} />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Sidebar */}
-        <motion.div variants={item} className="col-span-4 space-y-5">
-          {/* Weekly chart */}
-          <div className="card">
-            <h3 className="text-[14px] font-semibold text-gray-800 mb-4">Semaine en cours</h3>
-            {sessions.length === 0 ? (
-              <EmptyState icon={Dumbbell} title="Aucune session" description="Ajoutez votre première session d'entraînement." color="#34D399" />
-            ) : (
-              <div className="h-[120px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={weekData} barSize={10}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" vertical={false} />
-                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: "rgba(0,0,0,0.4)" }} axisLine={false} tickLine={false} />
-                    <YAxis hide />
-                    <Tooltip contentStyle={{ background: "rgba(255,255,255,0.95)", border: "none", borderRadius: 10, fontSize: 12 }}
-                      formatter={(v: any) => [`${v} kcal`, ""]} />
-                    <Bar dataKey="calories" fill="#34D399" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
-
-          {/* Spots list */}
-          <div className="card">
-            <h3 className="text-[14px] font-semibold text-gray-800 mb-3">Mes spots</h3>
-            {spots.length === 0 ? (
-              <EmptyState icon={MapPin} title="Aucun spot" description='Appuyez sur "+ Spot" pour ajouter votre premier lieu.' color="#5B9CF6"
-                action={{ label: "+ Nouveau spot", onClick: () => setSpotModal(true) }} />
-            ) : (
-              <div className="space-y-1 max-h-[260px] overflow-y-auto pr-1">
-                {spots.map((spot, i) => (
-                  <motion.div key={spot.id} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.3 + i * 0.05 }}
-                    className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-black/3 transition-colors cursor-pointer">
-                    <span className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-                      style={{ background: `${SPORT_COLORS[spot.type]}18` }}>
-                      {SPORT_EMOJIS[spot.type]}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-gray-700 truncate">{spot.name}</p>
-                      <p className="text-[11px] text-gray-400">{SPORT_LABELS[spot.type]}{spot.distance_km ? ` · ${spot.distance_km} km` : ""}</p>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </div>
-        </motion.div>
-
-        {/* Sessions history */}
-        <motion.div variants={item} className="col-span-12">
-          <div className="card">
-            <h2 className="text-[15px] font-semibold text-gray-800 mb-4">Historique des sessions</h2>
-            {sessions.length === 0 ? (
-              <EmptyState icon={Dumbbell} title="Aucune session enregistrée"
-                description='Utilisez le bouton "+ Session" ou ⌘K pour commencer à tracker vos entraînements.'
-                color="#5B9CF6" action={{ label: "+ Ajouter une session", onClick: () => setSessionModal(true) }} />
-            ) : (
-              <div className="grid grid-cols-7 gap-3">
-                {sessions.slice(0, 14).map((s, i) => (
-                  <motion.div key={s.id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.4 + i * 0.04 }} whileHover={{ y: -3 }}
-                    className="p-4 rounded-2xl text-center cursor-pointer"
-                    style={{ background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.15)" }}>
-                    <p className="text-[11px] text-gray-400 mb-1">{s.date?.slice(5).replace("-", "/")}</p>
-                    <p className="text-2xl mb-1">{SESSION_EMOJI[s.type] || "💪"}</p>
-                    <p className="text-[12px] font-semibold text-gray-700">{s.type}</p>
-                    <p className="text-[11px] text-gray-400">{s.duration_min}min</p>
-                    {s.calories && <p className="text-[11px] text-apple-mint font-medium mt-1">{s.calories} kcal</p>}
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Modal: Nouveau spot */}
-      <Modal open={spotModal} onClose={() => setSpotModal(false)} title="Nouveau spot" accentColor="#34D399">
-        <div className="space-y-4">
-          <FormField label="Nom du lieu" required>
-            <FormInput placeholder="Bois de Vincennes" value={spotName} onChange={setSpotName} />
-          </FormField>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Latitude" required>
-              <FormInput placeholder="48.8366" value={spotLat} onChange={setSpotLat} type="number" step={0.0001} />
-            </FormField>
-            <FormField label="Longitude" required>
-              <FormInput placeholder="2.4374" value={spotLng} onChange={setSpotLng} type="number" step={0.0001} />
-            </FormField>
-          </div>
-          <FormField label="Type">
-            <FormSelect value={spotType} onChange={setSpotType}
-              options={SPORT_TYPES.map((t) => ({ value: t, label: `${SPORT_EMOJIS[t]} ${SPORT_LABELS[t]}` }))} />
-          </FormField>
-          <FormField label="Distance (km)">
-            <FormInput placeholder="8.4" value={spotDist} onChange={setSpotDist} type="number" step={0.1} />
-          </FormField>
-          <FormField label="Notes">
-            <FormTextarea placeholder="Notes sur ce spot…" value={spotNotes} onChange={setSpotNotes} rows={2} />
-          </FormField>
-          <SubmitButton label="Ajouter le spot" loading={pending} color="#34D399" onClick={handleAddSpot} />
+      {/* Tabs */}
+      <motion.div variants={item}>
+        <div className="flex items-center gap-1 p-1 rounded-2xl w-fit"
+          style={{ background: "rgba(0,0,0,0.05)" }}>
+          {TABS.map((t) => {
+            const Icon = t.icon;
+            return (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium transition-all"
+                style={{
+                  background: tab === t.id ? "rgba(255,255,255,0.9)" : "transparent",
+                  color: tab === t.id ? "#1F2937" : "#9CA3AF",
+                  boxShadow: tab === t.id ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
+                }}>
+                <Icon className="w-4 h-4" />
+                {t.label}
+              </button>
+            );
+          })}
         </div>
-      </Modal>
+      </motion.div>
 
-      {/* Modal: Nouvelle session */}
-      <Modal open={sessionModal} onClose={() => setSessionModal(false)} title="Logger une session" accentColor="#5B9CF6">
+      <AnimatePresence mode="wait">
+        {/* ── Tab: Sessions ── */}
+        {tab === "sessions" && (
+          <motion.div key="sessions" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="space-y-5">
+            {/* Feeling chart */}
+            {feelingData.length > 0 && (
+              <div className="card">
+                <h3 className="text-[14px] font-semibold text-gray-800 mb-4">Courbe de Ressenti</h3>
+                <div className="h-[140px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={feelingData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" vertical={false} />
+                      <XAxis dataKey="type" tick={{ fontSize: 11, fill: "rgba(0,0,0,0.4)" }} axisLine={false} tickLine={false} />
+                      <YAxis domain={[1, 10]} hide />
+                      <Tooltip
+                        contentStyle={{ background: "rgba(255,255,255,0.95)", border: "none", borderRadius: 10, fontSize: 12 }}
+                        formatter={(v: any) => [`${v}/10`, "Ressenti"]}
+                      />
+                      <Line type="monotone" dataKey="feeling" stroke="#5B9CF6" strokeWidth={2.5}
+                        dot={{ fill: "#5B9CF6", r: 4 }} activeDot={{ r: 6 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* Sessions grid */}
+            <div className="card">
+              <h2 className="text-[15px] font-semibold text-gray-800 mb-4">Historique des sessions</h2>
+              {sessions.length === 0 ? (
+                <EmptyState icon={Dumbbell} title="Aucune session enregistrée"
+                  description='Utilisez le bouton "+ Session" pour commencer à tracker vos entraînements.'
+                  color="#34D399" action={{ label: "+ Ajouter une session", onClick: () => setSessionModal(true) }} />
+              ) : (
+                <div className="grid grid-cols-7 gap-3">
+                  {sessions.slice(0, 14).map((s, i) => (
+                    <motion.div key={s.id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.1 + i * 0.03 }} whileHover={{ y: -3 }}
+                      className="group p-4 rounded-2xl text-center relative cursor-pointer"
+                      style={{ background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.15)" }}>
+                      <p className="text-[11px] text-gray-400 mb-1">{s.date?.slice(5).replace("-", "/")}</p>
+                      <p className="text-2xl mb-1">{SESSION_EMOJI[s.type] || "💪"}</p>
+                      <p className="text-[12px] font-semibold text-gray-700">{s.type}</p>
+                      <p className="text-[11px] text-gray-400">{s.duration_min}min</p>
+                      {s.feeling && (
+                        <div className="mt-1 flex items-center justify-center gap-1">
+                          <span className="text-[10px] font-semibold text-apple-blue">{s.feeling}/10</span>
+                        </div>
+                      )}
+                      <button onClick={() => handleDeleteSession(s.id)}
+                        className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 w-5 h-5 rounded-full bg-red-50 flex items-center justify-center transition-opacity">
+                        <Trash2 className="w-3 h-3 text-red-400" />
+                      </button>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Tab: Programme ── */}
+        {tab === "programme" && (
+          <motion.div key="programme" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>
+            <div className="card">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-[15px] font-semibold text-gray-800">Programme de la semaine</h2>
+                <p className="text-[12px] text-gray-400">Clique sur un jour pour éditer</p>
+              </div>
+              <div className="grid grid-cols-7 gap-3">
+                {WEEK_DAYS.map((day, i) => {
+                  const dayPlan = program.find((p) => p.day_of_week === i);
+                  return (
+                    <motion.button key={i} onClick={() => openProgramModal(i)}
+                      whileHover={{ y: -4, scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                      className="group p-4 rounded-2xl text-left min-h-[180px] flex flex-col transition-all"
+                      style={{
+                        background: dayPlan ? "rgba(91,156,246,0.08)" : "rgba(0,0,0,0.03)",
+                        border: dayPlan ? "1px solid rgba(91,156,246,0.2)" : "1px dashed rgba(0,0,0,0.1)",
+                      }}>
+                      <p className="text-[11px] font-semibold text-gray-400 mb-2">{day.slice(0, 3).toUpperCase()}</p>
+                      {dayPlan ? (
+                        <>
+                          <p className="text-[12px] font-bold text-gray-800 mb-2 leading-tight">{dayPlan.label}</p>
+                          <div className="space-y-1 flex-1">
+                            {(dayPlan.exercises || []).slice(0, 4).map((ex, j) => (
+                              <p key={j} className="text-[10px] text-gray-500 truncate">
+                                • {ex.name} {ex.sets}×{ex.reps}
+                              </p>
+                            ))}
+                            {(dayPlan.exercises || []).length > 4 && (
+                              <p className="text-[10px] text-gray-400">+{(dayPlan.exercises || []).length - 4} autres</p>
+                            )}
+                          </div>
+                          <Edit3 className="w-3.5 h-3.5 text-blue-400 mt-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </>
+                      ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center opacity-30 group-hover:opacity-60 transition-opacity">
+                          <span className="text-2xl mb-1">🧘</span>
+                          <p className="text-[10px] text-gray-400">Repos</p>
+                          <p className="text-[9px] text-gray-300 mt-1">+ Ajouter</p>
+                        </div>
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Tab: Records ── */}
+        {tab === "records" && (
+          <motion.div key="records" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>
+            {Object.keys(prByExercise).length === 0 ? (
+              <div className="card">
+                <EmptyState icon={Trophy} title="Aucun record enregistré"
+                  description='Appuie sur "+ Nouveau Record" pour commencer à tracker tes performances.'
+                  color="#F59E0B" action={{ label: "+ Ajouter un record", onClick: () => setPrModal(true) }} />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {Object.entries(prByExercise).map(([exercise, records]) => {
+                  const best = records.reduce((b, r) => {
+                    if (!b) return r;
+                    if (r.weight_kg && b.weight_kg && r.weight_kg > b.weight_kg) return r;
+                    return b;
+                  }, records[0]);
+                  return (
+                    <motion.div key={exercise} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                      className="card">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
+                            style={{ background: "rgba(245,158,11,0.12)" }}>🏆</div>
+                          <div>
+                            <p className="text-[15px] font-semibold text-gray-900">{exercise}</p>
+                            <p className="text-[12px] text-gray-400">
+                              Meilleur: {best.weight_kg ? `${best.weight_kg} kg` : "—"}
+                              {best.reps ? ` × ${best.reps} reps` : ""}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[13px] font-bold" style={{ color: "#F59E0B" }}>
+                          {best.weight_kg ? `${best.weight_kg}kg` : best.reps ? `${best.reps} reps` : "—"}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {records.map((r) => (
+                          <div key={r.id} className="group flex items-center gap-3 p-2 rounded-xl hover:bg-black/3 transition-colors">
+                            <span className="text-[11px] text-gray-400 w-20 flex-shrink-0">{r.date}</span>
+                            <span className="text-[12px] text-gray-700 flex-1">
+                              {r.weight_kg ? `${r.weight_kg} kg` : "—"}
+                              {r.reps ? ` × ${r.reps} reps` : ""}
+                              {r.notes ? ` · ${r.notes}` : ""}
+                            </span>
+                            {r.weight_kg === best.weight_kg && r.id === best.id && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+                                style={{ background: "rgba(245,158,11,0.12)", color: "#F59E0B" }}>PR</span>
+                            )}
+                            <button onClick={() => handleDeletePR(r.id)}
+                              className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded-full bg-red-50 flex items-center justify-center transition-opacity">
+                              <Trash2 className="w-3 h-3 text-red-400" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Modal: Nouvelle Session ── */}
+      <Modal open={sessionModal} onClose={() => setSessionModal(false)} title="Logger une session" accentColor="#34D399">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Date" required>
@@ -289,18 +442,112 @@ export default function SportPage() {
             </FormField>
             <FormField label="Type" required>
               <FormSelect value={sesType} onChange={setSesType}
-                options={["Course", "Vélo", "Muscu", "Escalade", "Skate", "Yoga", "Natation", "Autre"].map((t) => ({ value: t, label: t }))} />
+                options={SESSION_TYPES.map((t) => ({ value: t, label: `${SESSION_EMOJI[t] || "💪"} ${t}` }))} />
             </FormField>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Durée (min)" required>
-              <FormInput placeholder="45" value={sesDuration} onChange={setSesDuration} type="number" min={1} />
+          <FormField label="Durée (min)" required>
+            <FormInput placeholder="60" value={sesDuration} onChange={setSesDuration} type="number" min={1} />
+          </FormField>
+
+          {/* Feeling slider */}
+          <FormField label={`Ressenti — ${sesFeeling}/10`}>
+            <div className="space-y-2">
+              <div className="relative h-2 bg-gray-100 rounded-full">
+                <div className="absolute inset-y-0 left-0 rounded-full transition-all"
+                  style={{
+                    width: `${((sesFeeling - 1) / 9) * 100}%`,
+                    background: sesFeeling >= 8 ? "#34D399" : sesFeeling >= 5 ? "#5B9CF6" : "#F87171",
+                  }} />
+                <input type="range" min={1} max={10} step={1} value={sesFeeling}
+                  onChange={(e) => setSesFeeling(parseInt(e.target.value))}
+                  className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" style={{ zIndex: 2 }} />
+                <div className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 shadow-md pointer-events-none transition-all"
+                  style={{
+                    left: `calc(${((sesFeeling - 1) / 9) * 100}% - 8px)`,
+                    borderColor: sesFeeling >= 8 ? "#34D399" : sesFeeling >= 5 ? "#5B9CF6" : "#F87171",
+                  }} />
+              </div>
+              <div className="flex justify-between text-[10px] text-gray-300">
+                <span>😴 1</span>
+                <span>🔥 10</span>
+              </div>
+            </div>
+          </FormField>
+
+          <FormField label="Notes">
+            <FormTextarea placeholder="Notes sur la session…" value={sesNotes} onChange={setSesNotes} rows={2} />
+          </FormField>
+          <SubmitButton label="Enregistrer la session (+50 pts)" loading={pending} color="#34D399" onClick={handleAddSession} />
+        </div>
+      </Modal>
+
+      {/* ── Modal: Nouveau PR ── */}
+      <Modal open={prModal} onClose={() => setPrModal(false)} title="Nouveau Record" accentColor="#F59E0B">
+        <div className="space-y-4">
+          <FormField label="Exercice" required>
+            <FormInput placeholder="Développé couché, Squat…" value={prExercise} onChange={setPrExercise} />
+          </FormField>
+          <div className="grid grid-cols-3 gap-3">
+            <FormField label="Poids (kg)">
+              <FormInput placeholder="100" value={prWeight} onChange={setPrWeight} type="number" step={0.5} />
             </FormField>
-            <FormField label="Calories brûlées">
-              <FormInput placeholder="350" value={sesCalories} onChange={setSesCalories} type="number" min={0} />
+            <FormField label="Répétitions">
+              <FormInput placeholder="5" value={prReps} onChange={setPrReps} type="number" min={1} />
+            </FormField>
+            <FormField label="Date">
+              <FormInput value={prDate} onChange={setPrDate} type="date" />
             </FormField>
           </div>
-          <SubmitButton label="Enregistrer la session" loading={pending} color="#5B9CF6" onClick={handleAddSession} />
+          <FormField label="Notes">
+            <FormInput placeholder="PR avec bonne forme, video…" value={prNotes} onChange={setPrNotes} />
+          </FormField>
+          <SubmitButton label="Enregistrer le record 🏆" loading={pending} color="#F59E0B" onClick={handleAddPR} />
+        </div>
+      </Modal>
+
+      {/* ── Modal: Éditer jour du programme ── */}
+      <Modal open={programModal} onClose={() => setProgramModal(false)} title={`Programme — ${WEEK_DAYS[editingDay]}`} accentColor="#5B9CF6" size="lg">
+        <div className="space-y-4">
+          <FormField label="Nom de la séance">
+            <FormInput placeholder="Push · Pectoraux & Épaules" value={dayLabel} onChange={setDayLabel} />
+          </FormField>
+
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Exercices</label>
+              <button onClick={addExercise}
+                className="flex items-center gap-1 text-[12px] text-blue-500 font-medium hover:opacity-70">
+                <Plus className="w-3.5 h-3.5" /> Ajouter
+              </button>
+            </div>
+            <div className="space-y-2">
+              {exercises.map((ex, i) => (
+                <div key={i} className="flex items-center gap-2 p-3 rounded-xl"
+                  style={{ background: "rgba(0,0,0,0.03)", border: "1px solid rgba(0,0,0,0.06)" }}>
+                  <input placeholder="Développé couché" value={ex.name}
+                    onChange={(e) => updateExercise(i, "name", e.target.value)}
+                    className="flex-1 text-[13px] text-gray-800 bg-transparent outline-none" />
+                  <input placeholder="4" value={ex.sets} type="number" min={1}
+                    onChange={(e) => updateExercise(i, "sets", parseInt(e.target.value) || 1)}
+                    className="w-10 text-center text-[13px] text-gray-600 bg-transparent outline-none" />
+                  <span className="text-[11px] text-gray-400">séries</span>
+                  <input placeholder="8-12" value={ex.reps}
+                    onChange={(e) => updateExercise(i, "reps", e.target.value)}
+                    className="w-14 text-center text-[13px] text-gray-600 bg-transparent outline-none" />
+                  <span className="text-[11px] text-gray-400">reps</span>
+                  <input placeholder="80kg" value={ex.weight || ""}
+                    onChange={(e) => updateExercise(i, "weight", e.target.value)}
+                    className="w-16 text-center text-[13px] text-gray-500 bg-transparent outline-none" />
+                  <button onClick={() => removeExercise(i)}
+                    className="w-6 h-6 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0 hover:bg-red-100">
+                    <Trash2 className="w-3 h-3 text-red-400" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <SubmitButton label="Sauvegarder" loading={pending} color="#5B9CF6" onClick={handleSaveDay} />
         </div>
       </Modal>
     </motion.div>

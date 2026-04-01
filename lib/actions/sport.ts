@@ -21,11 +21,15 @@ export async function deleteSpot(id: string) {
 
 export async function addSession(data: Omit<SportSession, "id" | "created_at">): Promise<SportSession> {
   const { sb, user } = await requireUser();
-  const { data: row, error } = await sb.from("sport_sessions").insert({ ...data, user_id: user.id }).select().single();
+  const { data: row, error } = await sb
+    .from("sport_sessions")
+    .insert({ ...data, user_id: user.id })
+    .select()
+    .single();
   if (error) throw new Error(error.message);
   revalidatePath("/sport");
   revalidatePath("/");
-  return row;
+  return row as SportSession;
 }
 
 export async function deleteSession(id: string) {

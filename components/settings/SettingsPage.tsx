@@ -5,8 +5,9 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   Droplets, Flame, Footprints, Dumbbell, DollarSign,
-  Moon, Apple, Activity, Settings, ChevronRight, User, Zap, Scale,
+  Moon, Apple, Activity, Settings, ChevronRight, User, Zap, Scale, Trophy,
 } from "lucide-react";
+import { DEFAULT_POINTS_CONFIG } from "@/lib/types";
 import { useSettings } from "@/contexts/SettingsContext";
 import { useDebouncedCallback } from "use-debounce";
 import type { UserSettings } from "@/lib/types";
@@ -123,6 +124,13 @@ const sections = [
         color: "#F472B6",
       },
     ],
+  },
+  {
+    id: "gamification",
+    label: "Score LockIn",
+    icon: Trophy,
+    color: "#F59E0B",
+    fields: [],
   },
 ];
 
@@ -368,7 +376,7 @@ export default function SettingsPage() {
               <div>
                 <h2 className="text-[16px] font-semibold text-gray-900">{currentSection.label}</h2>
                 <p className="text-[12px] text-gray-400">
-                  {activeSection === "profil" ? "Nom, intégrations" : `${currentSection.fields.length} objectif${currentSection.fields.length > 1 ? "s" : ""} configurables`}
+                  {activeSection === "profil" ? "Nom, intégrations" : activeSection === "gamification" ? "Bonus & malus LockIn Score" : `${currentSection.fields.length} objectif${currentSection.fields.length > 1 ? "s" : ""} configurables`}
                 </p>
               </div>
               {activeSection !== "profil" && (
@@ -585,6 +593,41 @@ export default function SettingsPage() {
                         Connecter Strava
                       </a>
                     )}
+                  </div>
+                </div>
+              ) : activeSection === "gamification" ? (
+                <div className="space-y-4">
+                  <p className="text-[13px] text-gray-500 leading-relaxed">
+                    Configure tes bonus et malus pour le système de points LockIn. Ces valeurs sont appliquées à chaque action enregistrée.
+                  </p>
+                  {Object.entries({
+                    seance_validee:   { label: "Séance validée", emoji: "🏋️", positive: true },
+                    objectif_eau:     { label: "Objectif eau atteint", emoji: "💧", positive: true },
+                    repas_sain:       { label: "Repas enregistré", emoji: "🥗", positive: true },
+                    supplement_check: { label: "Supplément pris", emoji: "💊", positive: true },
+                    uber_eats:        { label: "Uber Eats / Junk food", emoji: "🍔", positive: false },
+                    seance_manquee:   { label: "Séance manquée", emoji: "😴", positive: false },
+                    alcool:           { label: "Alcool", emoji: "🍺", positive: false },
+                  }).map(([key, conf]) => {
+                    const pts = DEFAULT_POINTS_CONFIG[key];
+                    const color = conf.positive ? "#34D399" : "#F87171";
+                    return (
+                      <div key={key} className="flex items-center gap-4 py-3 border-b border-black/4 last:border-0">
+                        <span className="text-xl">{conf.emoji}</span>
+                        <div className="flex-1">
+                          <p className="text-[13px] font-medium text-gray-700">{conf.label}</p>
+                          <p className="text-[11px] text-gray-400">Action {conf.positive ? "positive" : "négative"}</p>
+                        </div>
+                        <span className="text-[15px] font-bold" style={{ color }}>
+                          {pts > 0 ? "+" : ""}{pts} pts
+                        </span>
+                      </div>
+                    );
+                  })}
+                  <div className="mt-4 p-4 rounded-2xl" style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)" }}>
+                    <p className="text-[12px] font-semibold text-amber-700 mb-1">🎯 Objectif journalier</p>
+                    <p className="text-[22px] font-bold text-amber-600">100 pts</p>
+                    <p className="text-[11px] text-gray-500 mt-1">Atteins 100 pts/jour pour valider ta journée et maintenir ta série 🔥</p>
                   </div>
                 </div>
               ) : (

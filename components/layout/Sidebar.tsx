@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import {
   LayoutDashboard, MapPin, Apple, Wallet, Film,
-  Package, Command, Zap, Settings, LogOut, Calendar, FileText,
+  Package, Command, Zap, Settings, LogOut, Calendar, FileText, Flame,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -13,9 +13,10 @@ import { useSettings } from "@/contexts/SettingsContext";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, color: "#5B9CF6" },
+  { href: "/score", label: "Score ⚡", icon: Flame, color: "#F59E0B" },
   { href: "/calendar", label: "Calendrier", icon: Calendar, color: "#FB923C" },
   { href: "/notes", label: "Notes", icon: FileText, color: "#A78BFA" },
-  { href: "/sport", label: "Sport & Map", icon: MapPin, color: "#34D399" },
+  { href: "/sport", label: "Sport", icon: MapPin, color: "#34D399" },
   { href: "/nutrition", label: "Nutrition", icon: Apple, color: "#FB923C" },
   { href: "/budget", label: "Budget", icon: Wallet, color: "#F472B6" },
   { href: "/media", label: "Media Vault", icon: Film, color: "#A78BFA" },

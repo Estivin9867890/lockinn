@@ -1,7 +1,7 @@
 "use server";
 import { requireUser } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
-import type { NutritionLog, WaterLog } from "@/lib/types";
+import type { NutritionLog, WaterLog, MealIngredient } from "@/lib/types";
 
 export async function addMeal(data: Omit<NutritionLog, "id" | "created_at">): Promise<NutritionLog> {
   const { sb, user } = await requireUser();
@@ -32,6 +32,47 @@ export async function deleteWater(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/nutrition");
   revalidatePath("/");
+}
+
+export interface IngredientInput {
+  food_name: string;
+  weight_g: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  calories: number;
+}
+
+export async function addMealWithIngredients(
+  mealData: Omit<NutritionLog, "id" | "created_at">,
+  ingredients: IngredientInput[]
+): Promise<NutritionLog> {
+  const { sb, user } = await requireUser();
+  const { data: meal, error } = await sb
+    .from("nutrition_logs")
+    .insert({ ...mealData, user_id: user.id })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+
+  if (ingredients.length > 0) {
+    await sb.from("meal_ingredients").insert(
+      ingredients.map((ing) => ({ ...ing, meal_id: meal.id }))
+    );
+  }
+  revalidatePath("/nutrition");
+  revalidatePath("/");
+  return meal as NutritionLog;
+}
+
+export async function getMealIngredients(mealId: string): Promise<MealIngredient[]> {
+  const { sb } = await requireUser();
+  const { data } = await sb
+    .from("meal_ingredients")
+    .select("*")
+    .eq("meal_id", mealId)
+    .order("created_at");
+  return (data || []) as MealIngredient[];
 }
 
 export async function addWater(amount_ml: number, date?: string): Promise<WaterLog> {
