@@ -123,13 +123,36 @@ export interface SportSession {
   type: string;
   duration_min: number;
   calories?: number;
-  feeling?: number; // 1-10
+  feeling?: number;         // 1-10, RPE effort
+  readiness_score?: number; // 1-10, forme avant séance
+  session_sub_type?: string; // ex: "Push", "Dos", "Legs"
   spot_id?: string;
   notes?: string;
   strava_activity_id?: number;
   distance_km?: number;
   start_lat?: number;
   start_lng?: number;
+  created_at: string;
+}
+
+export interface WeightLog {
+  id: string;
+  user_id: string;
+  date: string;
+  weight_kg: number;
+  notes?: string | null;
+  created_at: string;
+}
+
+export interface ExerciseLibraryItem {
+  id: string;
+  user_id: string;
+  name: string;
+  muscle_group: string;
+  default_sets: number;
+  default_reps: string;
+  default_rest_sec: number;
+  notes?: string | null;
   created_at: string;
 }
 
@@ -161,6 +184,7 @@ export interface FinanceTransaction {
   category: string;
   amount: number;
   recurring: boolean;
+  is_income: boolean;
   created_at: string;
 }
 
@@ -472,12 +496,16 @@ export const STRAVA_TYPE_MAP: Record<string, string> = {
 
 export const EXPENSE_CATEGORIES = [
   "Alimentation", "Transport", "Sport", "Entertainment",
-  "Shopping", "Restaurant", "Tech", "Santé", "Logement", "Autre",
+  "Shopping", "Restaurant", "Bar", "Sorties", "Tech", "Santé", "Logement", "Autre",
+];
+export const INCOME_CATEGORIES = [
+  "Salaire", "Virement", "Remboursement", "Freelance", "Autre revenu",
 ];
 export const CATEGORY_EMOJIS: Record<string, string> = {
   Alimentation: "🛒", Transport: "🚇", Sport: "🏋️", Entertainment: "🎬",
-  Shopping: "🛍️", Restaurant: "🍽️", Tech: "💻", Santé: "💊",
-  Logement: "🏠", Autre: "💰",
+  Shopping: "🛍️", Restaurant: "🍽️", Bar: "🍺", Sorties: "🎉",
+  Tech: "💻", Santé: "💊", Logement: "🏠", Autre: "💰",
+  Salaire: "💼", Virement: "💸", Remboursement: "↩️", Freelance: "🧑‍💻", "Autre revenu": "➕",
 };
 
 export const MEDIA_TYPES = ["movie", "series", "book"] as const;

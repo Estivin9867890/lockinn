@@ -1,19 +1,19 @@
 "use client";
 import { useEffect, useState, useTransition, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Check, Droplets, Apple, Search, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Check, Droplets, Apple, Search, X, ChevronDown, ChevronUp, Scale } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
-import { addMealWithIngredients, toggleMealCompleted, addWater, deleteWater, getMealIngredients } from "@/lib/actions/nutrition";
+import { addMealWithIngredients, toggleMealCompleted, addWater, deleteWater, getMealIngredients, addWeightLog, getWeightLogs } from "@/lib/actions/nutrition";
 import { getSupplements, getTodaySupplementLogs, toggleSupplementLog } from "@/lib/actions/supplements";
 import { addPoints } from "@/lib/actions/points";
 import { useSettings } from "@/contexts/SettingsContext";
 import EmptyState from "@/components/ui/EmptyState";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import Modal, { FormField, FormInput, SubmitButton } from "@/components/ui/Modal";
-import type { NutritionLog, WaterLog, MealIngredient, Supplement, SupplementLog } from "@/lib/types";
+import type { NutritionLog, WaterLog, MealIngredient, Supplement, SupplementLog, WeightLog } from "@/lib/types";
 import { searchFoods, calcMacros, type FoodItem } from "@/lib/food-data";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const TODAY = new Date().toISOString().split("T")[0];
 
@@ -161,7 +161,11 @@ export default function NutritionPage() {
   const [weekData, setWeekData] = useState<any[]>([]);
   const [supplements, setSupplements] = useState<Supplement[]>([]);
   const [supplementLogs, setSupplementLogs] = useState<SupplementLog[]>([]);
+  const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [mealModal, setMealModal] = useState(false);
+  const [weightModal, setWeightModal] = useState(false);
+  const [weightInput, setWeightInput] = useState("");
+  const [weightDate, setWeightDate] = useState(new Date().toISOString().split("T")[0]);
   const [pending, setPending] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -175,7 +179,7 @@ export default function NutritionPage() {
   const [ingredients, setIngredients] = useState<{ food: FoodItem; weightG: number }[]>([]);
 
   const load = async () => {
-    const [m, w, week, supps, suppLogs] = await Promise.all([
+    const [m, w, week, supps, suppLogs, wl] = await Promise.all([
       supabase.from("nutrition_logs").select("*").eq("date", TODAY).order("created_at"),
       supabase.from("water_logs").select("*").eq("date", TODAY),
       supabase.from("nutrition_logs").select("date, calories, protein_g, carbs_g, fat_g")
@@ -183,9 +187,11 @@ export default function NutritionPage() {
         .order("date"),
       getSupplements(),
       getTodaySupplementLogs(),
+      getWeightLogs(30),
     ]);
     setMeals(m.data || []);
     setWater(w.data || []);
+    setWeightLogs(wl);
     setSupplements(supps);
     setSupplementLogs(suppLogs);
 
@@ -323,6 +329,19 @@ export default function NutritionPage() {
     } catch { load(); }
   };
 
+  const handleAddWeight = async () => {
+    if (!weightInput) return;
+    setPending(true);
+    try {
+      const newLog = await addWeightLog(parseFloat(weightInput), weightDate);
+      setWeightLogs((prev) => [newLog, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
+      toast.success(`⚖️ ${weightInput}kg enregistré !`);
+      setWeightModal(false);
+      setWeightInput("");
+    } catch { toast.error("Erreur lors de l'enregistrement"); }
+    setPending(false);
+  };
+
   const handleExpandMeal = async (mealId: string) => {
     if (expandedMeal === mealId) { setExpandedMeal(null); return; }
     setExpandedMeal(mealId);
@@ -352,12 +371,20 @@ export default function NutritionPage() {
           <p className="text-[13px] font-medium text-gray-400">Catégorie</p>
           <h1 className="text-[28px] font-semibold text-gray-900 tracking-tight mt-0.5">Nutrition 🥗</h1>
         </div>
-        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-          onClick={() => setMealModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[13px] font-medium"
-          style={{ background: "linear-gradient(135deg, #FB923C, #F97316)", boxShadow: "0 4px 16px rgba(251,146,60,0.35)" }}>
-          <Plus className="w-4 h-4" /> Ajouter un repas
-        </motion.button>
+        <div className="flex items-center gap-2">
+          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            onClick={() => setWeightModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[13px] font-medium"
+            style={{ background: "linear-gradient(135deg, #A78BFA, #7C3AED)", boxShadow: "0 4px 16px rgba(167,139,250,0.3)" }}>
+            <Scale className="w-4 h-4" /> Poids
+          </motion.button>
+          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            onClick={() => setMealModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[13px] font-medium"
+            style={{ background: "linear-gradient(135deg, #FB923C, #F97316)", boxShadow: "0 4px 16px rgba(251,146,60,0.35)" }}>
+            <Plus className="w-4 h-4" /> Ajouter un repas
+          </motion.button>
+        </div>
       </motion.div>
 
       {/* Calories bar */}
@@ -583,6 +610,68 @@ export default function NutritionPage() {
           )}
         </motion.div>
       </div>
+
+      {/* Weight curve */}
+      {weightLogs.length > 0 && (
+        <motion.div variants={item} className="card">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-[14px] font-semibold text-gray-800">Évolution du poids ⚖️</h2>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Dernier : <span className="font-semibold text-purple-500">{weightLogs[0]?.weight_kg} kg</span>
+                {weightLogs.length > 1 && (() => {
+                  const diff = weightLogs[0].weight_kg - weightLogs[weightLogs.length - 1].weight_kg;
+                  return (
+                    <span className={diff < 0 ? "text-green-500 ml-2" : diff > 0 ? "text-orange-500 ml-2" : "text-gray-400 ml-2"}>
+                      {diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)} kg sur la période
+                    </span>
+                  );
+                })()}
+              </p>
+            </div>
+            <button onClick={() => setWeightModal(true)}
+              className="text-[12px] text-purple-500 font-medium px-3 py-1.5 rounded-xl hover:bg-purple-50 transition-colors">
+              + Ajouter
+            </button>
+          </div>
+          <div className="h-[160px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={[...weightLogs].reverse().map((w) => ({ date: w.date.slice(5).replace("-", "/"), poids: w.weight_kg }))}>
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "rgba(0,0,0,0.4)" }} axisLine={false} tickLine={false} />
+                <YAxis
+                  domain={["auto", "auto"]}
+                  tick={{ fontSize: 10, fill: "rgba(0,0,0,0.4)" }}
+                  axisLine={false} tickLine={false}
+                  tickFormatter={(v) => `${v}kg`}
+                  width={45}
+                />
+                <Tooltip
+                  contentStyle={{ background: "rgba(255,255,255,0.98)", border: "none", borderRadius: 10, fontSize: 12, boxShadow: "0 4px 20px rgba(0,0,0,0.08)" }}
+                  formatter={(v: any) => [`${v} kg`, "Poids"]}
+                />
+                <Line type="monotone" dataKey="poids" stroke="#A78BFA" strokeWidth={2.5}
+                  dot={{ fill: "#A78BFA", r: 4, strokeWidth: 2, stroke: "white" }}
+                  activeDot={{ r: 6, fill: "#7C3AED" }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Weight modal */}
+      <Modal open={weightModal} onClose={() => setWeightModal(false)} title="Enregistrer mon poids" accentColor="#A78BFA">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Poids (kg)" required>
+              <FormInput placeholder="75.5" value={weightInput} onChange={setWeightInput} type="number" step={0.1} min={30} />
+            </FormField>
+            <FormField label="Date">
+              <FormInput value={weightDate} onChange={setWeightDate} type="date" />
+            </FormField>
+          </div>
+          <SubmitButton label="Enregistrer ⚖️" loading={pending} color="#A78BFA" onClick={handleAddWeight} />
+        </div>
+      </Modal>
 
       {/* Meal modal */}
       <Modal open={mealModal} onClose={() => { setMealModal(false); setIngredients([]); setMealName(""); setMealTime(""); }}

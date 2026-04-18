@@ -1,18 +1,19 @@
 "use client";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Trophy, Calendar, Dumbbell, Edit3, Check } from "lucide-react";
+import { Plus, Trash2, Trophy, Calendar, Dumbbell, Edit3, BookOpen, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { addSession, deleteSession } from "@/lib/actions/sport";
 import { getPRs, addPR, deletePR } from "@/lib/actions/pr";
 import { getWeeklyProgram, upsertWorkoutDay, deleteWorkoutDay } from "@/lib/actions/program";
+import { getExerciseLibrary, addExerciseLibraryItem, deleteExerciseLibraryItem } from "@/lib/actions/exercise-library";
 import { addPoints } from "@/lib/actions/points";
 import EmptyState from "@/components/ui/EmptyState";
 import { CardSkeleton, KPIRowSkeleton } from "@/components/ui/Skeleton";
 import Modal, { FormField, FormInput, FormSelect, FormTextarea, SubmitButton } from "@/components/ui/Modal";
-import type { SportSession, PRRecord, WorkoutDay, WorkoutExercise } from "@/lib/types";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import type { SportSession, PRRecord, WorkoutDay, WorkoutExercise, ExerciseLibraryItem } from "@/lib/types";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const SESSION_EMOJI: Record<string, string> = {
   Course: "🏃", Vélo: "🚴", Muscu: "🏋️", Escalade: "🧗", Skate: "🛹",
@@ -21,17 +22,42 @@ const SESSION_EMOJI: Record<string, string> = {
 
 const WEEK_DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 const SESSION_TYPES = ["Course", "Vélo", "Muscu", "Escalade", "Skate", "Yoga", "Natation", "Autre"];
+const MUSCLE_GROUPS = ["Pectoraux", "Dos", "Épaules", "Biceps", "Triceps", "Jambes", "Abdos", "Cardio", "Autre"];
 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } };
 const item = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0, transition: { type: "spring" as const, bounce: 0.3 } } };
 
-type Tab = "sessions" | "programme" | "records";
+type Tab = "sessions" | "programme" | "records" | "exercices";
+
+function SliderField({
+  label, value, onChange, color,
+}: { label: string; value: number; onChange: (v: number) => void; color: string }) {
+  return (
+    <FormField label={`${label} — ${value}/10`}>
+      <div className="space-y-2">
+        <div className="relative h-2 bg-gray-100 rounded-full">
+          <div className="absolute inset-y-0 left-0 rounded-full transition-all"
+            style={{ width: `${((value - 1) / 9) * 100}%`, background: color }} />
+          <input type="range" min={1} max={10} step={1} value={value}
+            onChange={(e) => onChange(parseInt(e.target.value))}
+            className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" style={{ zIndex: 2 }} />
+          <div className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 shadow-md pointer-events-none transition-all"
+            style={{ left: `calc(${((value - 1) / 9) * 100}% - 8px)`, borderColor: color }} />
+        </div>
+        <div className="flex justify-between text-[10px] text-gray-300">
+          <span>😴 1</span><span>🔥 10</span>
+        </div>
+      </div>
+    </FormField>
+  );
+}
 
 export default function SportPage() {
   const [tab, setTab] = useState<Tab>("sessions");
   const [sessions, setSessions] = useState<SportSession[]>([]);
   const [prs, setPrs] = useState<PRRecord[]>([]);
   const [program, setProgram] = useState<WorkoutDay[]>([]);
+  const [exerciseLib, setExerciseLib] = useState<ExerciseLibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Session modal
@@ -40,7 +66,9 @@ export default function SportPage() {
   const [sesDate, setSesDate] = useState(new Date().toISOString().split("T")[0]);
   const [sesType, setSesType] = useState("Muscu");
   const [sesDuration, setSesDuration] = useState("");
-  const [sesFeeling, setSesFeeling] = useState(7);
+  const [sesRPE, setSesRPE] = useState(7);
+  const [sesReadiness, setSesReadiness] = useState(7);
+  const [sesSubType, setSesSubType] = useState("");
   const [sesNotes, setSesNotes] = useState("");
 
   // PR modal
@@ -51,6 +79,9 @@ export default function SportPage() {
   const [prDate, setPrDate] = useState(new Date().toISOString().split("T")[0]);
   const [prNotes, setPrNotes] = useState("");
 
+  // PR evolution modal
+  const [prEvolutionExercise, setPrEvolutionExercise] = useState<string | null>(null);
+
   // Program modal
   const [programModal, setProgramModal] = useState(false);
   const [editingDay, setEditingDay] = useState<number>(0);
@@ -59,16 +90,28 @@ export default function SportPage() {
     { name: "", sets: 4, reps: "8-12", weight: "" },
   ]);
 
+  // Exercise library modal
+  const [exLibModal, setExLibModal] = useState(false);
+  const [exName, setExName] = useState("");
+  const [exGroup, setExGroup] = useState("Pectoraux");
+  const [exSets, setExSets] = useState("4");
+  const [exReps, setExReps] = useState("8-12");
+  const [exRest, setExRest] = useState("90");
+  const [exNotes, setExNotes] = useState("");
+  const [activeGroup, setActiveGroup] = useState("Pectoraux");
+
   const load = async () => {
     setLoading(true);
-    const [se, pr, pg] = await Promise.all([
+    const [se, pr, pg, lib] = await Promise.all([
       supabase.from("sport_sessions").select("*").order("date", { ascending: false }).limit(30),
       getPRs(),
       getWeeklyProgram(),
+      getExerciseLibrary(),
     ]);
     setSessions(se.data || []);
     setPrs(pr);
     setProgram(pg);
+    setExerciseLib(lib);
     setLoading(false);
   };
 
@@ -82,14 +125,16 @@ export default function SportPage() {
       const newSes = await addSession({
         date: sesDate, type: sesType,
         duration_min: parseInt(sesDuration),
-        feeling: sesFeeling,
+        feeling: sesRPE,
+        readiness_score: sesReadiness,
+        session_sub_type: sesType === "Muscu" && sesSubType ? sesSubType : undefined,
         notes: sesNotes || undefined,
       });
       setSessions((prev) => [newSes, ...prev]);
-      await addPoints("seance_validee", `Session ${sesType} — ${sesDuration}min`);
+      await addPoints("seance_validee", `Session ${sesType}${sesSubType ? ` · ${sesSubType}` : ""} — ${sesDuration}min`);
       toast.success("💪 Session enregistrée ! +50 pts");
       setSessionModal(false);
-      setSesDuration(""); setSesNotes(""); setSesFeeling(7);
+      setSesDuration(""); setSesNotes(""); setSesRPE(7); setSesReadiness(7); setSesSubType("");
     } catch { toast.error("Erreur lors de l'ajout"); }
     setPending(false);
   };
@@ -156,6 +201,32 @@ export default function SportPage() {
   const updateExercise = (i: number, field: keyof WorkoutExercise, value: string | number) =>
     setExercises((prev) => prev.map((e, idx) => idx === i ? { ...e, [field]: value } : e));
 
+  // Exercise library handlers
+  const handleAddExercise = async () => {
+    if (!exName) return;
+    setPending(true);
+    try {
+      const newEx = await addExerciseLibraryItem({
+        name: exName, muscle_group: exGroup,
+        default_sets: parseInt(exSets) || 4,
+        default_reps: exReps || "8-12",
+        default_rest_sec: parseInt(exRest) || 90,
+        notes: exNotes || null,
+      });
+      setExerciseLib((prev) => [...prev, newEx].sort((a, b) => a.muscle_group.localeCompare(b.muscle_group)));
+      toast.success("Exercice ajouté à la bibliothèque !");
+      setExLibModal(false);
+      setExName(""); setExNotes(""); setExReps("8-12"); setExSets("4"); setExRest("90");
+    } catch { toast.error("Erreur lors de l'ajout"); }
+    setPending(false);
+  };
+
+  const handleDeleteExercise = async (id: string) => {
+    setExerciseLib((prev) => prev.filter((e) => e.id !== id));
+    try { await deleteExerciseLibraryItem(id); }
+    catch { load(); }
+  };
+
   // Stats
   const avgFeeling = sessions.filter((s) => s.feeling).length > 0
     ? (sessions.filter((s) => s.feeling).reduce((s, x) => s + (x.feeling || 0), 0) / sessions.filter((s) => s.feeling).length).toFixed(1)
@@ -163,19 +234,32 @@ export default function SportPage() {
   const totalMin = sessions.reduce((s, x) => s + x.duration_min, 0);
   const thisMonthCount = sessions.filter((s) => s.date?.startsWith(new Date().toISOString().slice(0, 7))).length;
 
-  // Feeling chart data (last 10 sessions with feeling)
   const feelingData = sessions
     .filter((s) => s.feeling)
     .slice(0, 10)
     .reverse()
     .map((s, i) => ({ i: i + 1, feeling: s.feeling, type: s.type, date: s.date }));
 
-  // Group PRs by exercise (best record)
+  // Group PRs by exercise
   const prByExercise: Record<string, PRRecord[]> = {};
   for (const pr of prs) {
     if (!prByExercise[pr.exercise]) prByExercise[pr.exercise] = [];
     prByExercise[pr.exercise].push(pr);
   }
+
+  // Group exercises by muscle group
+  const libByGroup: Record<string, ExerciseLibraryItem[]> = {};
+  for (const ex of exerciseLib) {
+    if (!libByGroup[ex.muscle_group]) libByGroup[ex.muscle_group] = [];
+    libByGroup[ex.muscle_group].push(ex);
+  }
+
+  // PR evolution data for selected exercise
+  const prEvolutionData = prEvolutionExercise
+    ? (prByExercise[prEvolutionExercise] || [])
+        .slice().sort((a, b) => a.date.localeCompare(b.date))
+        .map((r) => ({ date: r.date.slice(5).replace("-", "/"), poids: r.weight_kg || 0, reps: r.reps || 0 }))
+    : [];
 
   if (loading) return (
     <div className="space-y-6">
@@ -189,6 +273,7 @@ export default function SportPage() {
     { id: "sessions", label: "Sessions", icon: Dumbbell },
     { id: "programme", label: "Programme", icon: Calendar },
     { id: "records", label: "Records", icon: Trophy },
+    { id: "exercices", label: "Exercices", icon: BookOpen },
   ];
 
   return (
@@ -216,6 +301,14 @@ export default function SportPage() {
               <Plus className="w-4 h-4" /> Nouveau Record
             </motion.button>
           )}
+          {tab === "exercices" && (
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              onClick={() => setExLibModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[13px] font-medium"
+              style={{ background: "linear-gradient(135deg, #A78BFA, #7C3AED)", boxShadow: "0 4px 16px rgba(167,139,250,0.35)" }}>
+              <Plus className="w-4 h-4" /> Exercice
+            </motion.button>
+          )}
         </div>
       </motion.div>
 
@@ -223,7 +316,7 @@ export default function SportPage() {
       <motion.div variants={item} className="grid grid-cols-4 gap-4">
         {[
           { label: "Sessions ce mois", value: thisMonthCount, icon: "🏋️", color: "#34D399" },
-          { label: "Ressenti moyen", value: avgFeeling !== "—" ? `${avgFeeling}/10` : "—", icon: "💯", color: "#5B9CF6" },
+          { label: "RPE moyen", value: avgFeeling !== "—" ? `${avgFeeling}/10` : "—", icon: "💯", color: "#5B9CF6" },
           { label: "Records enregistrés", value: Object.keys(prByExercise).length, icon: "🏆", color: "#F59E0B" },
           { label: "Temps total", value: `${Math.floor(totalMin / 60)}h${totalMin % 60}m`, icon: "⏱️", color: "#A78BFA" },
         ].map((kpi) => (
@@ -237,8 +330,7 @@ export default function SportPage() {
 
       {/* Tabs */}
       <motion.div variants={item}>
-        <div className="flex items-center gap-1 p-1 rounded-2xl w-fit"
-          style={{ background: "rgba(0,0,0,0.05)" }}>
+        <div className="flex items-center gap-1 p-1 rounded-2xl w-fit" style={{ background: "rgba(0,0,0,0.05)" }}>
           {TABS.map((t) => {
             const Icon = t.icon;
             return (
@@ -261,19 +353,17 @@ export default function SportPage() {
         {/* ── Tab: Sessions ── */}
         {tab === "sessions" && (
           <motion.div key="sessions" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="space-y-5">
-            {/* Feeling chart */}
             {feelingData.length > 0 && (
               <div className="card">
-                <h3 className="text-[14px] font-semibold text-gray-800 mb-4">Courbe de Ressenti</h3>
+                <h3 className="text-[14px] font-semibold text-gray-800 mb-4">Courbe RPE (Effort ressenti)</h3>
                 <div className="h-[140px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={feelingData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" vertical={false} />
                       <XAxis dataKey="type" tick={{ fontSize: 11, fill: "rgba(0,0,0,0.4)" }} axisLine={false} tickLine={false} />
                       <YAxis domain={[1, 10]} hide />
                       <Tooltip
                         contentStyle={{ background: "rgba(255,255,255,0.95)", border: "none", borderRadius: 10, fontSize: 12 }}
-                        formatter={(v: any) => [`${v}/10`, "Ressenti"]}
+                        formatter={(v: any) => [`${v}/10`, "RPE"]}
                       />
                       <Line type="monotone" dataKey="feeling" stroke="#5B9CF6" strokeWidth={2.5}
                         dot={{ fill: "#5B9CF6", r: 4 }} activeDot={{ r: 6 }} />
@@ -283,7 +373,6 @@ export default function SportPage() {
               </div>
             )}
 
-            {/* Sessions grid */}
             <div className="card">
               <h2 className="text-[15px] font-semibold text-gray-800 mb-4">Historique des sessions</h2>
               {sessions.length === 0 ? (
@@ -300,6 +389,9 @@ export default function SportPage() {
                       <p className="text-[11px] text-gray-400 mb-1">{s.date?.slice(5).replace("-", "/")}</p>
                       <p className="text-2xl mb-1">{SESSION_EMOJI[s.type] || "💪"}</p>
                       <p className="text-[12px] font-semibold text-gray-700">{s.type}</p>
+                      {s.session_sub_type && (
+                        <p className="text-[10px] text-gray-400">{s.session_sub_type}</p>
+                      )}
                       <p className="text-[11px] text-gray-400">{s.duration_min}min</p>
                       {s.feeling && (
                         <div className="mt-1 flex items-center justify-center gap-1">
@@ -343,9 +435,7 @@ export default function SportPage() {
                           <p className="text-[12px] font-bold text-gray-800 mb-2 leading-tight">{dayPlan.label}</p>
                           <div className="space-y-1 flex-1">
                             {(dayPlan.exercises || []).slice(0, 4).map((ex, j) => (
-                              <p key={j} className="text-[10px] text-gray-500 truncate">
-                                • {ex.name} {ex.sets}×{ex.reps}
-                              </p>
+                              <p key={j} className="text-[10px] text-gray-500 truncate">• {ex.name} {ex.sets}×{ex.reps}</p>
                             ))}
                             {(dayPlan.exercises || []).length > 4 && (
                               <p className="text-[10px] text-gray-400">+{(dayPlan.exercises || []).length - 4} autres</p>
@@ -386,8 +476,7 @@ export default function SportPage() {
                     return b;
                   }, records[0]);
                   return (
-                    <motion.div key={exercise} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                      className="card">
+                    <motion.div key={exercise} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
@@ -400,9 +489,18 @@ export default function SportPage() {
                             </p>
                           </div>
                         </div>
-                        <span className="text-[13px] font-bold" style={{ color: "#F59E0B" }}>
-                          {best.weight_kg ? `${best.weight_kg}kg` : best.reps ? `${best.reps} reps` : "—"}
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[13px] font-bold" style={{ color: "#F59E0B" }}>
+                            {best.weight_kg ? `${best.weight_kg}kg` : best.reps ? `${best.reps} reps` : "—"}
+                          </span>
+                          {records.length > 1 && (
+                            <button onClick={() => setPrEvolutionExercise(exercise)}
+                              className="text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all hover:opacity-80"
+                              style={{ background: "rgba(91,156,246,0.1)", color: "#5B9CF6" }}>
+                              📈 Courbe
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="space-y-1">
                         {records.map((r) => (
@@ -431,6 +529,66 @@ export default function SportPage() {
             )}
           </motion.div>
         )}
+
+        {/* ── Tab: Exercices ── */}
+        {tab === "exercices" && (
+          <motion.div key="exercices" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="space-y-5">
+            {/* Group filter */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {MUSCLE_GROUPS.map((g) => (
+                <button key={g} onClick={() => setActiveGroup(g)}
+                  className="px-3 py-1.5 rounded-xl text-[12px] font-medium transition-all"
+                  style={{
+                    background: activeGroup === g ? "rgba(167,139,250,0.15)" : "rgba(0,0,0,0.04)",
+                    color: activeGroup === g ? "#7C3AED" : "#6B7280",
+                    border: activeGroup === g ? "1px solid rgba(167,139,250,0.3)" : "1px solid transparent",
+                  }}>
+                  {g}
+                </button>
+              ))}
+            </div>
+
+            {exerciseLib.length === 0 ? (
+              <div className="card">
+                <EmptyState icon={BookOpen} title="Bibliothèque vide"
+                  description='Ajoute tes exercices avec leurs paramètres habituels (séries, reps, repos).'
+                  color="#A78BFA" action={{ label: "+ Ajouter un exercice", onClick: () => setExLibModal(true) }} />
+              </div>
+            ) : (
+              <div className="card">
+                <h2 className="text-[15px] font-semibold text-gray-800 mb-4">{activeGroup}</h2>
+                {(libByGroup[activeGroup] || []).length === 0 ? (
+                  <p className="text-[13px] text-gray-400 text-center py-8">Aucun exercice dans ce groupe musculaire.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {(libByGroup[activeGroup] || []).map((ex) => (
+                      <motion.div key={ex.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                        className="group flex items-center gap-4 p-3 rounded-2xl transition-all"
+                        style={{ background: "rgba(167,139,250,0.06)", border: "1px solid rgba(167,139,250,0.12)" }}>
+                        <div className="flex-1">
+                          <p className="text-[14px] font-semibold text-gray-800">{ex.name}</p>
+                          {ex.notes && <p className="text-[11px] text-gray-400 mt-0.5">{ex.notes}</p>}
+                        </div>
+                        <div className="flex items-center gap-3 text-[12px] text-gray-500">
+                          <span className="px-2 py-1 rounded-lg" style={{ background: "rgba(167,139,250,0.1)" }}>
+                            {ex.default_sets} × {ex.default_reps}
+                          </span>
+                          <span className="px-2 py-1 rounded-lg" style={{ background: "rgba(91,156,246,0.1)", color: "#5B9CF6" }}>
+                            ⏱ {ex.default_rest_sec}s
+                          </span>
+                        </div>
+                        <button onClick={() => handleDeleteExercise(ex.id)}
+                          className="opacity-0 group-hover:opacity-100 w-6 h-6 rounded-full bg-red-50 flex items-center justify-center transition-opacity">
+                          <Trash2 className="w-3 h-3 text-red-400" />
+                        </button>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* ── Modal: Nouvelle Session ── */}
@@ -449,30 +607,24 @@ export default function SportPage() {
             <FormInput placeholder="60" value={sesDuration} onChange={setSesDuration} type="number" min={1} />
           </FormField>
 
-          {/* Feeling slider */}
-          <FormField label={`Ressenti — ${sesFeeling}/10`}>
-            <div className="space-y-2">
-              <div className="relative h-2 bg-gray-100 rounded-full">
-                <div className="absolute inset-y-0 left-0 rounded-full transition-all"
-                  style={{
-                    width: `${((sesFeeling - 1) / 9) * 100}%`,
-                    background: sesFeeling >= 8 ? "#34D399" : sesFeeling >= 5 ? "#5B9CF6" : "#F87171",
-                  }} />
-                <input type="range" min={1} max={10} step={1} value={sesFeeling}
-                  onChange={(e) => setSesFeeling(parseInt(e.target.value))}
-                  className="absolute inset-0 w-full opacity-0 cursor-pointer h-full" style={{ zIndex: 2 }} />
-                <div className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 shadow-md pointer-events-none transition-all"
-                  style={{
-                    left: `calc(${((sesFeeling - 1) / 9) * 100}% - 8px)`,
-                    borderColor: sesFeeling >= 8 ? "#34D399" : sesFeeling >= 5 ? "#5B9CF6" : "#F87171",
-                  }} />
-              </div>
-              <div className="flex justify-between text-[10px] text-gray-300">
-                <span>😴 1</span>
-                <span>🔥 10</span>
-              </div>
-            </div>
-          </FormField>
+          {sesType === "Muscu" && (
+            <FormField label="Type de séance">
+              <FormInput placeholder="Push · Pectoraux, Pull · Dos, Legs…" value={sesSubType} onChange={setSesSubType} />
+            </FormField>
+          )}
+
+          <SliderField
+            label="RPE — Effort ressenti (après)"
+            value={sesRPE}
+            onChange={setSesRPE}
+            color={sesRPE >= 8 ? "#F87171" : sesRPE >= 5 ? "#5B9CF6" : "#34D399"}
+          />
+          <SliderField
+            label="État de forme (avant)"
+            value={sesReadiness}
+            onChange={setSesReadiness}
+            color={sesReadiness >= 8 ? "#34D399" : sesReadiness >= 5 ? "#5B9CF6" : "#F87171"}
+          />
 
           <FormField label="Notes">
             <FormTextarea placeholder="Notes sur la session…" value={sesNotes} onChange={setSesNotes} rows={2} />
@@ -511,12 +663,10 @@ export default function SportPage() {
           <FormField label="Nom de la séance">
             <FormInput placeholder="Push · Pectoraux & Épaules" value={dayLabel} onChange={setDayLabel} />
           </FormField>
-
           <div>
             <div className="flex items-center justify-between mb-3">
               <label className="text-[12px] font-semibold text-gray-500 uppercase tracking-wide">Exercices</label>
-              <button onClick={addExercise}
-                className="flex items-center gap-1 text-[12px] text-blue-500 font-medium hover:opacity-70">
+              <button onClick={addExercise} className="flex items-center gap-1 text-[12px] text-blue-500 font-medium hover:opacity-70">
                 <Plus className="w-3.5 h-3.5" /> Ajouter
               </button>
             </div>
@@ -546,10 +696,99 @@ export default function SportPage() {
               ))}
             </div>
           </div>
-
           <SubmitButton label="Sauvegarder" loading={pending} color="#5B9CF6" onClick={handleSaveDay} />
         </div>
       </Modal>
+
+      {/* ── Modal: Ajouter exercice bibliothèque ── */}
+      <Modal open={exLibModal} onClose={() => setExLibModal(false)} title="Ajouter un exercice" accentColor="#A78BFA">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Nom" required>
+              <FormInput placeholder="Développé couché" value={exName} onChange={setExName} />
+            </FormField>
+            <FormField label="Groupe musculaire">
+              <FormSelect value={exGroup} onChange={setExGroup}
+                options={MUSCLE_GROUPS.map((g) => ({ value: g, label: g }))} />
+            </FormField>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <FormField label="Séries">
+              <FormInput placeholder="4" value={exSets} onChange={setExSets} type="number" min={1} />
+            </FormField>
+            <FormField label="Répétitions">
+              <FormInput placeholder="8-12" value={exReps} onChange={setExReps} />
+            </FormField>
+            <FormField label="Repos (sec)">
+              <FormInput placeholder="90" value={exRest} onChange={setExRest} type="number" min={0} />
+            </FormField>
+          </div>
+          <FormField label="Notes">
+            <FormInput placeholder="Barre, haltères, cable…" value={exNotes} onChange={setExNotes} />
+          </FormField>
+          <SubmitButton label="Ajouter à la bibliothèque" loading={pending} color="#A78BFA" onClick={handleAddExercise} />
+        </div>
+      </Modal>
+
+      {/* ── Modal: Évolution PR ── */}
+      <AnimatePresence>
+        {prEvolutionExercise && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)" }}
+            onClick={() => setPrEvolutionExercise(null)}>
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl"
+              style={{ boxShadow: "0 24px 80px rgba(0,0,0,0.2)" }}>
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h2 className="text-[17px] font-semibold text-gray-900">📈 {prEvolutionExercise}</h2>
+                  <p className="text-[12px] text-gray-400 mt-0.5">Progression de la charge</p>
+                </div>
+                <button onClick={() => setPrEvolutionExercise(null)}
+                  className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors">
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+              <div className="h-[220px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={prEvolutionData}>
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: "rgba(0,0,0,0.4)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: "rgba(0,0,0,0.4)" }} axisLine={false} tickLine={false}
+                      tickFormatter={(v) => `${v}kg`} />
+                    <Tooltip
+                      contentStyle={{ background: "rgba(255,255,255,0.98)", border: "none", borderRadius: 10, fontSize: 12, boxShadow: "0 4px 20px rgba(0,0,0,0.1)" }}
+                      formatter={(v: any, name: string) => [name === "poids" ? `${v} kg` : `${v} reps`, name === "poids" ? "Charge" : "Reps"]}
+                    />
+                    <Line type="monotone" dataKey="poids" stroke="#F59E0B" strokeWidth={2.5}
+                      dot={{ fill: "#F59E0B", r: 5, strokeWidth: 2, stroke: "white" }}
+                      activeDot={{ r: 7, fill: "#D97706" }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-3">
+                {[
+                  { label: "Première charge", value: prEvolutionData[0]?.poids ? `${prEvolutionData[0].poids}kg` : "—" },
+                  { label: "Meilleure charge", value: prEvolutionData.length ? `${Math.max(...prEvolutionData.map(d => d.poids))}kg` : "—" },
+                  { label: "Sessions tracées", value: prEvolutionData.length.toString() },
+                ].map((stat) => (
+                  <div key={stat.label} className="p-3 rounded-xl text-center" style={{ background: "rgba(245,158,11,0.08)" }}>
+                    <p className="text-[16px] font-bold text-gray-900">{stat.value}</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">{stat.label}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

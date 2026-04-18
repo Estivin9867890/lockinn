@@ -75,6 +75,29 @@ export async function getMealIngredients(mealId: string): Promise<MealIngredient
   return (data || []) as MealIngredient[];
 }
 
+export async function addWeightLog(weight_kg: number, date?: string, notes?: string): Promise<import("@/lib/types").WeightLog> {
+  const { sb, user } = await requireUser();
+  const { data: row, error } = await sb
+    .from("weight_logs")
+    .insert({ weight_kg, date: date ?? new Date().toISOString().split("T")[0], notes: notes ?? null, user_id: user.id })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  revalidatePath("/nutrition");
+  revalidatePath("/");
+  return row;
+}
+
+export async function getWeightLogs(limit = 60): Promise<import("@/lib/types").WeightLog[]> {
+  const { sb } = await requireUser();
+  const { data } = await sb
+    .from("weight_logs")
+    .select("*")
+    .order("date", { ascending: false })
+    .limit(limit);
+  return (data || []) as import("@/lib/types").WeightLog[];
+}
+
 export async function addWater(amount_ml: number, date?: string): Promise<WaterLog> {
   const { sb, user } = await requireUser();
   const { data: row, error } = await sb

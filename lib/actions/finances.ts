@@ -3,6 +3,10 @@ import { requireUser } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
 import type { FinanceTransaction, FinanceSubscription } from "@/lib/types";
 
+export async function addIncome(data: Omit<FinanceTransaction, "id" | "created_at" | "is_income">): Promise<FinanceTransaction> {
+  return addTransaction({ ...data, is_income: true });
+}
+
 export async function addTransaction(data: Omit<FinanceTransaction, "id" | "created_at">): Promise<FinanceTransaction> {
   const { sb, user } = await requireUser();
   const { data: row, error } = await sb.from("finances_transactions").insert({ ...data, user_id: user.id }).select().single();

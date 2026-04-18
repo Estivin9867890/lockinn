@@ -11,7 +11,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import Modal, { FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/Modal";
 import type { FinanceTransaction, FinanceSubscription } from "@/lib/types";
-import { EXPENSE_CATEGORIES, CATEGORY_EMOJIS } from "@/lib/types";
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, CATEGORY_EMOJIS } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -84,6 +84,7 @@ export default function BudgetPage() {
   const [txCat, setTxCat] = useState("Alimentation");
   const [txAmount, setTxAmount] = useState("");
   const [txRecurring, setTxRecurring] = useState(false);
+  const [txIsIncome, setTxIsIncome] = useState(false);
 
   // Sub form
   const [subName, setSubName] = useState("");
@@ -103,11 +104,14 @@ export default function BudgetPage() {
   useEffect(() => { load(); }, []);
 
   const monthTx = transactions.filter((t) => t.date?.startsWith(THIS_MONTH));
-  const totalSpent = monthTx.reduce((s, t) => s + t.amount, 0);
+  const monthExpenses = monthTx.filter((t) => !t.is_income);
+  const monthIncome = monthTx.filter((t) => t.is_income);
+  const totalSpent = monthExpenses.reduce((s, t) => s + t.amount, 0);
+  const totalIncome = monthIncome.reduce((s, t) => s + t.amount, 0);
   const totalSubs = subs.reduce((s, sub) => s + sub.amount, 0);
-  const remaining = settings.monthly_budget_eur - totalSpent;
+  const remaining = settings.monthly_budget_eur + totalIncome - totalSpent;
 
-  // Weekly budget
+  // Weekly budget (only expenses, not income)
   const now = new Date();
   const dayOfWeek = (now.getDay() + 6) % 7; // 0=Lun
   const weekStart = new Date(now); weekStart.setDate(now.getDate() - dayOfWeek); weekStart.setHours(0, 0, 0, 0);
@@ -115,33 +119,34 @@ export default function BudgetPage() {
   const weeklyLimit = (settings as { weekly_budget_eur?: number }).weekly_budget_eur
     ?? Math.round(settings.monthly_budget_eur / 4);
   const weeklySpent = transactions
-    .filter(t => t.date >= weekStartStr)
+    .filter(t => t.date >= weekStartStr && !t.is_income)
     .reduce((s, t) => s + t.amount, 0);
   const thermalThreshold = (settings as { thermal_threshold?: number }).thermal_threshold ?? 80;
 
-  // Category totals for this month
+  // Category totals for this month (expenses only)
   const catTotals: Record<string, number> = {};
-  monthTx.forEach((t) => { catTotals[t.category] = (catTotals[t.category] || 0) + t.amount; });
+  monthExpenses.forEach((t) => { catTotals[t.category] = (catTotals[t.category] || 0) + t.amount; });
 
-  // 6-month rolling spending data
-  const months6: { month: string; total: number }[] = [];
+  // 6-month rolling spending data (expenses + income separately)
+  const months6: { month: string; depenses: number; revenus: number }[] = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(); d.setMonth(d.getMonth() - i);
     const key = d.toISOString().slice(0, 7);
     const label = d.toLocaleDateString("fr-FR", { month: "short" });
-    const total = transactions.filter((t) => t.date?.startsWith(key)).reduce((s, t) => s + t.amount, 0);
-    months6.push({ month: label, total });
+    const depenses = transactions.filter((t) => t.date?.startsWith(key) && !t.is_income).reduce((s, t) => s + t.amount, 0);
+    const revenus = transactions.filter((t) => t.date?.startsWith(key) && t.is_income).reduce((s, t) => s + t.amount, 0);
+    months6.push({ month: label, depenses, revenus });
   }
 
   const handleAddTx = async () => {
     if (!txLabel || !txAmount) return;
     setPending(true);
     try {
-      const newTx = await addTransaction({ date: txDate, label: txLabel, category: txCat, amount: parseFloat(txAmount), recurring: txRecurring });
+      const newTx = await addTransaction({ date: txDate, label: txLabel, category: txCat, amount: parseFloat(txAmount), recurring: txRecurring, is_income: txIsIncome });
       setTransactions((prev) => [newTx, ...prev]);
-      toast.success("💸 Dépense enregistrée !");
+      toast.success(txIsIncome ? `💚 Revenu enregistré : +${formatCurrency(parseFloat(txAmount))}` : "💸 Dépense enregistrée !");
       setTxModal(false);
-      setTxLabel(""); setTxAmount(""); setTxRecurring(false);
+      setTxLabel(""); setTxAmount(""); setTxRecurring(false); setTxIsIncome(false);
     } catch { toast.error("Erreur lors de l'ajout"); }
     setPending(false);
   };
@@ -210,9 +215,9 @@ export default function BudgetPage() {
       <motion.div variants={item} className="grid grid-cols-4 gap-4">
         {[
           { label: "Dépensé ce mois", value: formatCurrency(totalSpent), icon: "💸", color: "#F472B6", sub: `Budget: ${formatCurrency(settings.monthly_budget_eur)}` },
+          { label: "Revenus ce mois", value: formatCurrency(totalIncome), icon: "💚", color: "#34D399", sub: `${monthIncome.length} entrées` },
+          { label: "Solde restant", value: formatCurrency(Math.max(remaining, 0)), icon: remaining >= 0 ? "✅" : "⚠️", color: remaining >= 0 ? "#34D399" : "#F87171", sub: remaining >= 0 ? "Dans le budget" : "Dépassement !" },
           { label: "Abonnements/mois", value: formatCurrency(totalSubs), icon: "🔄", color: "#A78BFA", sub: `${subs.length} actifs` },
-          { label: "Restant budget", value: formatCurrency(Math.max(remaining, 0)), icon: remaining >= 0 ? "✅" : "⚠️", color: remaining >= 0 ? "#34D399" : "#F87171", sub: remaining >= 0 ? "Dans le budget" : "Dépassement !" },
-          { label: "Transactions", value: monthTx.length.toString(), icon: "📊", color: "#5B9CF6", sub: "Ce mois" },
         ].map((kpi) => (
           <motion.div key={kpi.label} whileHover={{ y: -2 }} className="card">
             <span className="text-2xl mb-3 block">{kpi.icon}</span>
@@ -299,13 +304,14 @@ export default function BudgetPage() {
             ) : (
               <div className="h-[180px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={months6}>
+                  <BarChart data={months6} barGap={2}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" vertical={false} />
                     <XAxis dataKey="month" tick={{ fontSize: 11, fill: "rgba(0,0,0,0.4)" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: "rgba(0,0,0,0.4)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}€`} />
                     <Tooltip contentStyle={{ background: "rgba(255,255,255,0.95)", border: "none", borderRadius: 10, fontSize: 12 }}
-                      formatter={(v: any) => [formatCurrency(v), "Dépenses"]} />
-                    <Bar dataKey="total" fill="#F472B6" radius={[6, 6, 0, 0]} />
+                      formatter={(v: any, name: string) => [formatCurrency(v), name === "depenses" ? "Dépenses" : "Revenus"]} />
+                    <Bar dataKey="depenses" fill="#F472B6" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="revenus" fill="#34D399" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -392,7 +398,8 @@ export default function BudgetPage() {
                   <motion.div key={t.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                     transition={{ delay: 0.3 + i * 0.03 }}
                     className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-black/3 transition-colors group cursor-pointer">
-                    <span className="w-8 h-8 rounded-lg bg-black/4 flex items-center justify-center text-sm flex-shrink-0">
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
+                      style={{ background: t.is_income ? "rgba(52,211,153,0.12)" : "rgba(0,0,0,0.04)" }}>
                       {CATEGORY_EMOJIS[t.category] || "💰"}
                     </span>
                     <div className="flex-1 min-w-0">
@@ -402,7 +409,12 @@ export default function BudgetPage() {
                     {t.recurring && (
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-50 text-purple-500 font-medium">Récurrent</span>
                     )}
-                    <span className="text-[13px] font-semibold text-gray-800">-{formatCurrency(t.amount)}</span>
+                    {t.is_income && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: "rgba(52,211,153,0.12)", color: "#10B981" }}>Revenu</span>
+                    )}
+                    <span className="text-[13px] font-semibold" style={{ color: t.is_income ? "#10B981" : "#1F2937" }}>
+                      {t.is_income ? "+" : "-"}{formatCurrency(t.amount)}
+                    </span>
                     <button onClick={() => handleDeleteTx(t.id)}
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] text-red-400 hover:text-red-600 ml-1">
                       ×
@@ -416,11 +428,26 @@ export default function BudgetPage() {
       </div>
 
       {/* Add transaction modal */}
-      <Modal open={txModal} onClose={() => setTxModal(false)} title="Nouvelle dépense" accentColor="#F472B6">
+      <Modal open={txModal} onClose={() => { setTxModal(false); setTxIsIncome(false); }} title={txIsIncome ? "Nouveau revenu" : "Nouvelle dépense"} accentColor={txIsIncome ? "#34D399" : "#F472B6"}>
         <div className="space-y-4">
+          {/* Income / Expense toggle */}
+          <div className="flex items-center p-1 rounded-xl gap-1" style={{ background: "rgba(0,0,0,0.05)" }}>
+            {[{ label: "💸 Dépense", income: false }, { label: "💚 Revenu", income: true }].map(({ label, income }) => (
+              <button key={label} onClick={() => { setTxIsIncome(income); setTxCat(income ? "Salaire" : "Alimentation"); }}
+                className="flex-1 py-2 rounded-lg text-[13px] font-medium transition-all"
+                style={{
+                  background: txIsIncome === income ? (income ? "rgba(52,211,153,0.15)" : "rgba(255,255,255,0.9)") : "transparent",
+                  color: txIsIncome === income ? (income ? "#059669" : "#1F2937") : "#9CA3AF",
+                  boxShadow: txIsIncome === income ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Libellé" required>
-              <FormInput placeholder="Monoprix" value={txLabel} onChange={setTxLabel} />
+              <FormInput placeholder={txIsIncome ? "Salaire avril…" : "Monoprix…"} value={txLabel} onChange={setTxLabel} />
             </FormField>
             <FormField label="Montant (€)" required>
               <FormInput placeholder="42.50" value={txAmount} onChange={setTxAmount} type="number" min={0} step={0.01} />
@@ -429,18 +456,22 @@ export default function BudgetPage() {
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Catégorie">
               <FormSelect value={txCat} onChange={setTxCat}
-                options={EXPENSE_CATEGORIES.map((c) => ({ value: c, label: `${CATEGORY_EMOJIS[c] || ""} ${c}` }))} />
+                options={(txIsIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((c) => ({ value: c, label: `${CATEGORY_EMOJIS[c] || ""} ${c}` }))} />
             </FormField>
             <FormField label="Date">
               <FormInput value={txDate} onChange={setTxDate} type="date" />
             </FormField>
           </div>
-          <label className="flex items-center gap-2.5 cursor-pointer">
-            <input type="checkbox" checked={txRecurring} onChange={(e) => setTxRecurring(e.target.checked)}
-              className="w-4 h-4 rounded accent-apple-blue" />
-            <span className="text-[13px] text-gray-700">Dépense récurrente</span>
-          </label>
-          <SubmitButton label="Enregistrer la dépense" loading={pending} color="#F472B6" onClick={handleAddTx} />
+          {!txIsIncome && (
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input type="checkbox" checked={txRecurring} onChange={(e) => setTxRecurring(e.target.checked)}
+                className="w-4 h-4 rounded accent-apple-blue" />
+              <span className="text-[13px] text-gray-700">Dépense récurrente</span>
+            </label>
+          )}
+          <SubmitButton
+            label={txIsIncome ? "Enregistrer le revenu" : "Enregistrer la dépense"}
+            loading={pending} color={txIsIncome ? "#34D399" : "#F472B6"} onClick={handleAddTx} />
         </div>
       </Modal>
 

@@ -84,6 +84,14 @@ TMDB_API_KEY=           # optionnel — Media Vault
 | `snapshots` | Mémoire du jour (date UNIQUE, phrase, photo_url, mood 1-5) |
 - `user_settings` : +`sleep_wake_time TEXT`
 
+### Tables V6 (Sport Analysis + Weight + Finance Income)
+| Table | Description |
+|-------|-------------|
+| `weight_logs` | Poids corporel (date, weight_kg, notes) |
+| `exercise_library` | Bibliothèque exercices (name, muscle_group, default_sets, default_reps, default_rest_sec) |
+- `sport_sessions` : +`readiness_score INT` (forme avant séance 1-10), +`session_sub_type TEXT` (ex: "Push", "Dos")
+- `finances_transactions` : +`is_income BOOLEAN` (revenu vs dépense)
+
 ---
 
 ## Architecture fichiers
@@ -202,6 +210,17 @@ public/
 - [x] **No-Phone Zone** : Page Visibility API dans Focus Timer, ×1.5 pts si 0 distraction
 - [x] Types TypeScript : SleepLog, Investment, Snapshot
 - [x] SQL V4 : sleep_logs, investments, snapshots tables
+
+### V6 — Sport Analysis + Poids + Finance Pro
+- [x] **Évolution PR** : clic sur exercice → modale courbe Recharts (charge × date) + stats recap
+- [x] **RPE + Forme** : 2 sliders lors de la validation séance (effort post / forme pré)
+- [x] **Sous-type Muscu** : champ "Push · Pectoraux", "Legs"… visible dans les cartes session
+- [x] **Bibliothèque Exercices** : onglet dédié, filtrable par groupe musculaire (9 groupes), CRUD
+- [x] **Poids corporel** : log quotidien + courbe d'évolution Recharts sur page Nutrition
+- [x] **Finance Revenus** : toggle Dépense/Revenu dans la modale, solde positif recalculé
+- [x] **Nouvelles catégories** : "Bar 🍺" et "Sorties 🎉" dans les presets dépenses
+- [x] **Graphique Finance** : barres doubles (Dépenses rose / Revenus vert) sur 6 mois
+- [x] SQL V6 : weight_logs, exercise_library, colonnes sport_sessions, is_income
 
 ---
 
